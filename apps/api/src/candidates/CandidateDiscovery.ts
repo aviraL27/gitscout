@@ -89,7 +89,13 @@ export class CandidateDiscovery implements CandidateSource {
       this.github.getUserRepos(ref.username, { perPage: REPOS_PER_USER }),
     ]);
 
-    return this.buildCandidate(user, repos);
+    // Discover contact email from profile or commit history
+    let email = user.email && !user.email.includes("noreply") ? user.email : null;
+    if (!email) {
+      email = await this.github.getUserEmail(ref.username, repos);
+    }
+
+    return this.buildCandidate(user, repos, email);
   }
 
   /**
@@ -134,7 +140,7 @@ export class CandidateDiscovery implements CandidateSource {
 
   // ─── Builders ─────────────────────────────────────────────────────────────
 
-  private buildCandidate(user: GitHubUser, repos: GitHubRepo[]): Candidate {
+  private buildCandidate(user: GitHubUser, repos: GitHubRepo[], email?: string | null): Candidate {
     const ownedRepos = repos.filter((r) => !r.fork);
 
     // Aggregate unique languages used across repos
@@ -179,6 +185,7 @@ export class CandidateDiscovery implements CandidateSource {
       location: user.location ?? undefined,
       company: user.company ?? undefined,
       website: user.blog || undefined,
+      email: email ? email.trim() : undefined,
       followers: user.followers,
       publicRepos: user.public_repos,
       languages,

@@ -87,6 +87,7 @@ export function CandidateCard({ candidate, jobId, requirement }: Props) {
   const [showOutreach, setShowOutreach] = useState(false);
   const [copiedSubject, setCopiedSubject] = useState(false);
   const [copiedBody, setCopiedBody] = useState(false);
+  const [copiedEmail, setCopiedEmail] = useState(false);
   const [loadingOutreach, setLoadingOutreach] = useState(false);
 
   const topRepos = [...candidate.repositories]
@@ -157,6 +158,55 @@ export function CandidateCard({ candidate, jobId, requirement }: Props) {
           {candidate.location && (
             <div style={{ fontSize: "0.8125rem", color: "var(--color-ink-3)", marginTop: "0.125rem" }}>
               {candidate.location}
+            </div>
+          )}
+          {candidate.email ? (
+            <div style={{ display: "flex", alignItems: "center", gap: "0.375rem", marginTop: "0.3125rem", flexWrap: "wrap" }}>
+              <span style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.25rem",
+                fontSize: "0.75rem",
+                color: "#15803d",
+                background: "#f0fdf4",
+                border: "1px solid #bbf7d0",
+                padding: "2px 8px",
+                borderRadius: "100px",
+                fontFamily: "var(--font-mono)",
+                fontWeight: 600,
+              }}>
+                <span>✉</span>
+                <a
+                  href={`mailto:${candidate.email}`}
+                  style={{ color: "inherit", textDecoration: "none" }}
+                  title="Send email"
+                >
+                  {candidate.email}
+                </a>
+              </span>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(candidate.email!);
+                  setCopiedEmail(true);
+                  setTimeout(() => setCopiedEmail(false), 2000);
+                }}
+                style={{
+                  padding: "1px 6px",
+                  borderRadius: "4px",
+                  border: "1px solid var(--color-paper-3)",
+                  background: "#fff",
+                  fontSize: "0.6875rem",
+                  color: copiedEmail ? "var(--color-accent)" : "var(--color-ink-3)",
+                  cursor: "pointer",
+                }}
+                title="Copy email address"
+              >
+                {copiedEmail ? "✓ Copied" : "Copy"}
+              </button>
+            </div>
+          ) : (
+            <div style={{ fontSize: "0.6875rem", color: "var(--color-ink-4)", marginTop: "0.25rem", fontStyle: "italic" }}>
+              ✉ No public email listed
             </div>
           )}
           {candidate.bio && (
@@ -353,6 +403,38 @@ export function CandidateCard({ candidate, jobId, requirement }: Props) {
             </button>
           </div>
 
+          {/* Recipient */}
+          <div style={{ marginBottom: "0.75rem" }}>
+            <div style={{ fontSize: "0.6875rem", fontWeight: 600, color: "var(--color-ink-4)", textTransform: "uppercase", marginBottom: "0.25rem" }}>
+              To (Recipient)
+            </div>
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              background: "#fff",
+              border: "1px solid var(--color-paper-3)",
+              borderRadius: "6px",
+              padding: "0.5rem 0.75rem",
+              gap: "0.5rem",
+            }}>
+              {candidate.email ? (
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                  <span style={{ fontSize: "0.8125rem", fontWeight: 600, color: "var(--color-ink)" }}>
+                    {candidate.name ? `${candidate.name} <${candidate.email}>` : candidate.email}
+                  </span>
+                  <span style={{ fontSize: "0.6875rem", background: "#f0fdf4", color: "#166534", padding: "1px 6px", borderRadius: "100px", fontWeight: 600 }}>
+                    Verified Git Email
+                  </span>
+                </div>
+              ) : (
+                <span style={{ fontSize: "0.8125rem", color: "var(--color-ink-4)", fontStyle: "italic" }}>
+                  No public email discovered for @{candidate.username}
+                </span>
+              )}
+            </div>
+          </div>
+
           {/* Subject */}
           <div style={{ marginBottom: "0.75rem" }}>
             <div style={{ fontSize: "0.6875rem", fontWeight: 600, color: "var(--color-ink-4)", textTransform: "uppercase", marginBottom: "0.25rem" }}>
@@ -443,8 +525,35 @@ export function CandidateCard({ candidate, jobId, requirement }: Props) {
               <span>{copiedBody ? "Copied to clipboard!" : "Copy Full Email"}</span>
             </button>
 
+            {/* Direct Web Gmail Composer */}
             <a
-              href={`mailto:?subject=${encodeURIComponent(outreach.subject)}&body=${encodeURIComponent(outreach.body)}`}
+              href={`https://mail.google.com/mail/?view=cm&fs=1${candidate.email ? `&to=${encodeURIComponent(candidate.email)}` : ""}&su=${encodeURIComponent(outreach.subject)}&body=${encodeURIComponent(outreach.body)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                padding: "0.375rem 0.75rem",
+                borderRadius: "6px",
+                border: "1px solid #ea4335",
+                background: "#fff5f5",
+                fontSize: "0.75rem",
+                fontWeight: 600,
+                color: "#c5221f",
+                textDecoration: "none",
+                display: "flex",
+                alignItems: "center",
+                gap: "0.25rem",
+              }}
+              title="Open draft directly in Gmail web composer"
+            >
+              <span>🔴</span>
+              <span>Open in Gmail</span>
+            </a>
+
+            {/* Default Mail Client (mailto) */}
+            <a
+              href={candidate.email
+                ? `mailto:${candidate.email}?subject=${encodeURIComponent(outreach.subject)}&body=${encodeURIComponent(outreach.body)}`
+                : `mailto:?subject=${encodeURIComponent(outreach.subject)}&body=${encodeURIComponent(outreach.body)}`}
               style={{
                 padding: "0.375rem 0.75rem",
                 borderRadius: "6px",
@@ -460,7 +569,7 @@ export function CandidateCard({ candidate, jobId, requirement }: Props) {
               }}
             >
               <span>🚀</span>
-              <span>Open in Mail Client</span>
+              <span>Open in Mail App</span>
             </a>
           </div>
         </div>

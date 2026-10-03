@@ -79,6 +79,30 @@ export function ResultsPage() {
   const filtered = filterLang ? job.candidates.filter((c) => c.languages.includes(filterLang)) : job.candidates;
   const displayed = sortCandidates(filtered, sortKey);
 
+  function exportCsv() {
+    if (!job || job.candidates.length === 0) return;
+    const headers = ["Name", "Username", "Email", "Relevance Score", "Profile URL", "Location", "Followers", "Public Repos", "Languages"];
+    const rows = job.candidates.map((c) => [
+      `"${(c.name || "").replace(/"/g, '""')}"`,
+      `"${c.username}"`,
+      `"${c.email || ""}"`,
+      c.relevanceScore ?? "",
+      `"${c.profileUrl}"`,
+      `"${(c.location || "").replace(/"/g, '""')}"`,
+      c.followers,
+      c.publicRepos,
+      `"${(c.languages || []).join(", ")}"`,
+    ]);
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `gitscout-${job.id || "candidates"}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+
   return (
     <div style={{ minHeight: "100vh", background: "var(--color-paper)" }}>
       {/* Sticky header */}
@@ -260,6 +284,28 @@ export function ResultsPage() {
                 {allLangs.map((l) => <option key={l} value={l}>{l}</option>)}
               </select>
             )}
+
+            <button
+              onClick={exportCsv}
+              title="Download CSV containing candidates, scores, and email addresses"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.25rem",
+                padding: "0.375rem 0.75rem",
+                borderRadius: "8px",
+                border: "1px solid var(--color-paper-3)",
+                background: "#fff",
+                fontSize: "0.75rem",
+                fontWeight: 600,
+                color: "var(--color-ink-2)",
+                cursor: "pointer",
+                transition: "all 0.1s",
+              }}
+            >
+              <span>📥</span>
+              <span>Export CSV</span>
+            </button>
 
             <span style={{ fontSize: "0.75rem", color: "var(--color-ink-4)", fontFamily: "var(--font-mono)" }}>
               {displayed.length}/{job.candidates.length}

@@ -25,6 +25,7 @@ export const CandidateSchema = z.object({
   location: z.string().optional(),
   company: z.string().optional(),
   website: z.string().optional(),
+  email: z.string().optional(),
 
   followers: z.number().int().nonnegative(),
   publicRepos: z.number().int().nonnegative(),

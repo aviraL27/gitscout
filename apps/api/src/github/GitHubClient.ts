@@ -100,6 +100,60 @@ export class GitHubClient {
     return this.coreLimit;
   }
 
+  /**
+   * Attempt to discover the candidate's personal contact email via:
+   * 1. Public profile email
+   * 2. Public PushEvent commit authors
+   * 3. Author commits in their primary owned repositories
+   */
+  async getUserEmail(username: string, sampleRepos: GitHubRepo[] = []): Promise<string | null> {
+    // 1. Check profile email
+    try {
+      const user = await this.getUser(username);
+      if (user.email && !user.email.includes("noreply") && user.email.includes("@")) {
+        return user.email.trim();
+      }
+    } catch { /* proceed */ }
+
+    // 2. Check public push events
+    try {
+      const events = await this.get<Array<{ type: string; payload?: { commits?: Array<{ author?: { email?: string } }> } }>>(
+        `/users/${username}/events/public?per_page=10`
+      );
+      if (Array.isArray(events)) {
+        for (const ev of events) {
+          if (ev.type === "PushEvent" && ev.payload?.commits) {
+            for (const c of ev.payload.commits) {
+              const email = c.author?.email;
+              if (email && email.includes("@") && !email.includes("noreply") && !email.endsWith("@github.com")) {
+                return email.trim();
+              }
+            }
+          }
+        }
+      }
+    } catch { /* proceed */ }
+
+    // 3. Check commits in top owned repositories
+    for (const repo of sampleRepos.slice(0, 2)) {
+      try {
+        const commits = await this.get<Array<{ commit?: { author?: { email?: string } } }>>(
+          `/repos/${username}/${repo.name}/commits?per_page=3`
+        );
+        if (Array.isArray(commits)) {
+          for (const c of commits) {
+            const email = c.commit?.author?.email;
+            if (email && email.includes("@") && !email.includes("noreply") && !email.endsWith("@github.com")) {
+              return email.trim();
+            }
+          }
+        }
+      } catch { /* proceed */ }
+    }
+
+    return null;
+  }
+
   // ─── Core fetch with retry ─────────────────────────────────────────────────
 
   private async get<T>(path: string, attempt = 1): Promise<T> {

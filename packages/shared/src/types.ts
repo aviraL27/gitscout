@@ -23,6 +23,7 @@ export interface Candidate {
   location?: string;
   company?: string;
   website?: string;
+  email?: string;
 
   followers: number;
   publicRepos: number;
@@ -127,6 +128,7 @@ export interface GitHubUser {
   company: string | null;
   blog: string | null;
   location: string | null;
+  email: string | null;
   bio: string | null;
   public_repos: number;
   followers: number;
