@@ -1,137 +1,372 @@
 import { Candidate } from "@gitscout/shared";
+import { useState } from "react";
 
 interface Props {
   candidate: Candidate;
+  jobId?: string;
+  requirement?: string;
 }
 
-export function CandidateCard({ candidate }: Props) {
-  const topRepos = candidate.repositories
-    .sort((a, b) => b.stars - a.stars)
-    .slice(0, 3);
+function ScoreRing({ score }: { score: number }) {
+  const color =
+    score >= 80 ? "#1a7a4a" : score >= 60 ? "#b45309" : "#9b9b92";
+  const size = 52;
+  const r = 20;
+  const circ = 2 * Math.PI * r;
+  const dash = (score / 100) * circ;
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 hover:border-gray-600 transition-all shadow-sm">
-      {/* Header row */}
-      <div className="flex items-start gap-4">
+    <div style={{ position: "relative", width: size, height: size, flexShrink: 0 }}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ transform: "rotate(-90deg)" }}>
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--color-paper-2)" strokeWidth={4} />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          stroke={color}
+          strokeWidth={4}
+          strokeDasharray={`${dash} ${circ - dash}`}
+          strokeLinecap="round"
+        />
+      </svg>
+      <div style={{
+        position: "absolute",
+        inset: 0,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: "0.8125rem",
+        fontWeight: 700,
+        color,
+        fontFamily: "var(--font-mono)",
+      }}>
+        {score}
+      </div>
+    </div>
+  );
+}
+
+export function CandidateCard({ candidate, jobId, requirement }: Props) {
+  const [expanded, setExpanded] = useState(false);
+  const [outreach, setOutreach] = useState<{ subject: string; body: string } | null>(null);
+  const [loadingOutreach, setLoadingOutreach] = useState(false);
+
+  const topRepos = [...candidate.repositories]
+    .sort((a, b) => b.stars - a.stars)
+    .slice(0, expanded ? 6 : 3);
+
+  async function generateOutreach() {
+    if (!jobId) return;
+    setLoadingOutreach(true);
+    try {
+      const res = await fetch(`/api/search/${jobId}/outreach/${candidate.username}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ senderName: "Aviral", requirement }),
+      });
+      const data = await res.json() as { subject: string; body: string };
+      setOutreach(data);
+    } catch { /* noop */ }
+    setLoadingOutreach(false);
+  }
+
+  return (
+    <article
+      style={{
+        background: "#fff",
+        border: "1px solid var(--color-paper-3)",
+        borderRadius: "12px",
+        padding: "1.25rem 1.5rem",
+        transition: "border-color 0.15s",
+      }}
+      onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.borderColor = "var(--color-paper-2)")}
+      onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.borderColor = "var(--color-paper-3)")}
+    >
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "flex-start", gap: "0.875rem" }}>
+        {/* Avatar */}
         {candidate.avatarUrl ? (
           <img
             src={candidate.avatarUrl}
             alt={candidate.username}
-            className="w-12 h-12 rounded-full ring-2 ring-gray-700 flex-shrink-0"
+            style={{ width: 44, height: 44, borderRadius: "50%", border: "1.5px solid var(--color-paper-3)", flexShrink: 0 }}
           />
         ) : (
-          <div className="w-12 h-12 rounded-full bg-indigo-700 flex items-center justify-center text-white font-bold text-lg flex-shrink-0">
+          <div style={{
+            width: 44, height: 44, borderRadius: "50%",
+            background: "var(--color-paper-2)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: "1.125rem", fontWeight: 700, color: "var(--color-ink-3)",
+            flexShrink: 0,
+          }}>
             {(candidate.name ?? candidate.username)[0].toUpperCase()}
           </div>
         )}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-semibold text-white text-base">
+
+        {/* Name + meta */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+            <span style={{ fontWeight: 700, color: "var(--color-ink)", fontSize: "0.9375rem", letterSpacing: "-0.01em" }}>
               {candidate.name ?? candidate.username}
             </span>
-            <span className="text-gray-400 text-sm">@{candidate.username}</span>
+            <span style={{ fontSize: "0.8125rem", color: "var(--color-ink-4)", fontFamily: "var(--font-mono)" }}>
+              @{candidate.username}
+            </span>
           </div>
           {candidate.location && (
-            <div className="text-gray-400 text-sm mt-0.5">
-              📍 {candidate.location}
+            <div style={{ fontSize: "0.8125rem", color: "var(--color-ink-3)", marginTop: "0.125rem" }}>
+              {candidate.location}
             </div>
           )}
           {candidate.bio && (
-            <p className="text-gray-300 text-sm mt-1 line-clamp-2">{candidate.bio}</p>
+            <p style={{
+              fontSize: "0.875rem",
+              color: "var(--color-ink-2)",
+              marginTop: "0.375rem",
+              lineHeight: 1.5,
+              display: "-webkit-box",
+              WebkitLineClamp: expanded ? undefined : 2,
+              WebkitBoxOrient: "vertical",
+              overflow: "hidden",
+            }}>
+              {candidate.bio}
+            </p>
           )}
         </div>
 
-        {/* Relevance badge — placeholder in Phase 1 */}
+        {/* Score */}
         {candidate.relevanceScore !== undefined && (
-          <div className="flex-shrink-0 text-center">
-            <div
-              className={`text-2xl font-bold ${
-                candidate.relevanceScore >= 80
-                  ? "text-green-400"
-                  : candidate.relevanceScore >= 60
-                  ? "text-yellow-400"
-                  : "text-gray-400"
-              }`}
-            >
-              {candidate.relevanceScore}
-            </div>
-            <div className="text-gray-500 text-xs">relevance</div>
-          </div>
+          <ScoreRing score={candidate.relevanceScore} />
         )}
       </div>
 
-      {/* Stats */}
-      <div className="flex gap-4 mt-3 text-sm text-gray-400">
-        <span>👥 {candidate.followers.toLocaleString()} followers</span>
-        <span>📦 {candidate.publicRepos} repos</span>
-        {candidate.company && <span>🏢 {candidate.company}</span>}
+      {/* Stats row */}
+      <div style={{
+        display: "flex",
+        gap: "1.25rem",
+        marginTop: "0.875rem",
+        fontSize: "0.8125rem",
+        color: "var(--color-ink-3)",
+      }}>
+        <span>{candidate.followers.toLocaleString()} followers</span>
+        <span>{candidate.publicRepos} repos</span>
+        {candidate.company && <span>{candidate.company}</span>}
+        {candidate.signals && (
+          <div style={{ display: "flex", gap: "0.25rem", marginLeft: "auto" }}>
+            {Object.entries(candidate.signals).map(([key, val]) => (
+              <div
+                key={key}
+                title={key}
+                style={{
+                  width: 8, height: 8, borderRadius: "50%",
+                  background: val ? "#22c55e" : "var(--color-paper-3)",
+                }}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Languages */}
       {candidate.languages.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mt-3">
-          {candidate.languages.slice(0, 6).map((lang) => (
-            <span
-              key={lang}
-              className="px-2 py-0.5 bg-gray-800 rounded-full text-xs text-indigo-300 border border-gray-700"
-            >
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.3125rem", marginTop: "0.75rem" }}>
+          {candidate.languages.slice(0, 7).map((lang) => (
+            <span key={lang} style={{
+              padding: "0.1875rem 0.5625rem",
+              borderRadius: "100px",
+              border: "1px solid var(--color-paper-3)",
+              fontSize: "0.75rem",
+              color: "var(--color-ink-2)",
+              background: "var(--color-paper)",
+              fontWeight: 500,
+            }}>
               {lang}
             </span>
           ))}
-          {candidate.languages.length > 6 && (
-            <span className="px-2 py-0.5 text-xs text-gray-500">
-              +{candidate.languages.length - 6} more
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* Top repos */}
-      {topRepos.length > 0 && (
-        <div className="mt-3 space-y-1">
-          {topRepos.map((repo) => (
-            <div
-              key={repo.name}
-              className="flex items-center gap-2 text-sm text-gray-400"
-            >
-              <span className="text-gray-600">📁</span>
-              <a
-                href={repo.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-indigo-400 hover:text-indigo-300 truncate"
-              >
-                {repo.name}
-              </a>
-              {repo.description && (
-                <span className="text-gray-500 truncate hidden sm:inline">
-                  — {repo.description}
-                </span>
-              )}
-              <span className="ml-auto text-gray-500 flex-shrink-0">
-                ⭐ {repo.stars}
+          {candidate.matchingSkills && candidate.matchingSkills
+            .filter((s) => !candidate.languages.includes(s))
+            .slice(0, 4)
+            .map((skill) => (
+              <span key={skill} style={{
+                padding: "0.1875rem 0.5625rem",
+                borderRadius: "100px",
+                border: "1px solid #bfdbfe",
+                fontSize: "0.75rem",
+                color: "var(--color-accent)",
+                background: "#eff6ff",
+                fontWeight: 500,
+              }}>
+                {skill}
               </span>
-            </div>
-          ))}
+            ))}
         </div>
       )}
 
-      {/* Action buttons */}
-      <div className="flex gap-2 mt-4">
+      {/* AI reason */}
+      {candidate.relevanceReason && (
+        <p style={{
+          marginTop: "0.875rem",
+          fontSize: "0.8125rem",
+          color: "var(--color-ink-3)",
+          lineHeight: 1.55,
+          padding: "0.625rem 0.875rem",
+          background: "var(--color-paper)",
+          borderRadius: "8px",
+          borderLeft: "2px solid var(--color-accent)",
+        }}>
+          {candidate.relevanceReason}
+        </p>
+      )}
+
+      {/* Repos */}
+      {topRepos.length > 0 && (
+        <div style={{ marginTop: "0.875rem" }}>
+          <div style={{ borderTop: "1px solid var(--color-paper-2)", paddingTop: "0.75rem" }}>
+            {topRepos.map((repo) => (
+              <div key={repo.name} style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.625rem",
+                padding: "0.3125rem 0",
+                fontSize: "0.8125rem",
+              }}>
+                <a
+                  href={repo.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: "var(--color-accent)", fontWeight: 600, textDecoration: "none", flexShrink: 0 }}
+                >
+                  {repo.name}
+                </a>
+                {repo.language && (
+                  <span style={{ color: "var(--color-ink-4)", fontSize: "0.75rem" }}>{repo.language}</span>
+                )}
+                {repo.description && (
+                  <span style={{
+                    color: "var(--color-ink-3)",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                    flex: 1,
+                  }}>
+                    {repo.description}
+                  </span>
+                )}
+                <span style={{
+                  marginLeft: "auto",
+                  color: "var(--color-ink-4)",
+                  fontSize: "0.75rem",
+                  fontFamily: "var(--font-mono)",
+                  flexShrink: 0,
+                }}>
+                  ★ {repo.stars}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Outreach */}
+      {outreach && (
+        <div style={{
+          marginTop: "1rem",
+          background: "var(--color-paper)",
+          border: "1px solid var(--color-paper-3)",
+          borderRadius: "8px",
+          padding: "0.875rem 1rem",
+        }}>
+          <div style={{ fontSize: "0.75rem", fontWeight: 600, color: "var(--color-ink-3)", marginBottom: "0.375rem" }}>
+            DRAFT OUTREACH
+          </div>
+          <div style={{ fontSize: "0.8125rem", fontWeight: 600, color: "var(--color-ink)", marginBottom: "0.5rem" }}>
+            {outreach.subject}
+          </div>
+          <pre style={{
+            fontSize: "0.8125rem",
+            color: "var(--color-ink-2)",
+            whiteSpace: "pre-wrap",
+            margin: 0,
+            lineHeight: 1.6,
+            fontFamily: "var(--font-sans)",
+          }}>
+            {outreach.body}
+          </pre>
+          <button
+            onClick={() => navigator.clipboard.writeText(`Subject: ${outreach.subject}\n\n${outreach.body}`)}
+            style={{
+              marginTop: "0.75rem",
+              padding: "0.375rem 0.75rem",
+              borderRadius: "6px",
+              border: "1px solid var(--color-paper-3)",
+              background: "transparent",
+              fontSize: "0.75rem",
+              color: "var(--color-ink-3)",
+              cursor: "pointer",
+            }}
+          >
+            Copy to clipboard
+          </button>
+        </div>
+      )}
+
+      {/* Actions */}
+      <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem" }}>
         <a
           href={candidate.profileUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm text-gray-200 transition-colors"
+          style={{
+            padding: "0.4375rem 0.875rem",
+            borderRadius: "8px",
+            border: "1px solid var(--color-paper-3)",
+            background: "transparent",
+            fontSize: "0.8125rem",
+            color: "var(--color-ink-2)",
+            textDecoration: "none",
+            fontWeight: 500,
+            transition: "all 0.1s",
+          }}
         >
           View GitHub
         </a>
-        {candidate.relevanceReason && (
-          <div className="px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-400 line-clamp-1 flex-1">
-            💬 {candidate.relevanceReason}
-          </div>
+        {jobId && (
+          <button
+            onClick={generateOutreach}
+            disabled={loadingOutreach}
+            style={{
+              padding: "0.4375rem 0.875rem",
+              borderRadius: "8px",
+              border: "1px solid var(--color-paper-3)",
+              background: "transparent",
+              fontSize: "0.8125rem",
+              color: outreach ? "var(--color-accent)" : "var(--color-ink-2)",
+              cursor: loadingOutreach ? "wait" : "pointer",
+              fontWeight: 500,
+              fontFamily: "var(--font-sans)",
+            }}
+          >
+            {loadingOutreach ? "Writing…" : outreach ? "Regenerate" : "Generate outreach"}
+          </button>
         )}
+        <button
+          onClick={() => setExpanded(!expanded)}
+          style={{
+            marginLeft: "auto",
+            padding: "0.4375rem 0.875rem",
+            borderRadius: "8px",
+            border: "1px solid var(--color-paper-3)",
+            background: "transparent",
+            fontSize: "0.8125rem",
+            color: "var(--color-ink-4)",
+            cursor: "pointer",
+            fontFamily: "var(--font-sans)",
+          }}
+        >
+          {expanded ? "Less" : "More"}
+        </button>
       </div>
-    </div>
+    </article>
   );
 }

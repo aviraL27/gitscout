@@ -1,1 +1,41 @@
 @import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Albert+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@theme {
+  --font-sans: 'Albert Sans', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  /* GitScout palette — warm editorial */
+  --color-ink: #1a1a18;
+  --color-ink-2: #3d3d38;
+  --color-ink-3: #6b6b63;
+  --color-ink-4: #9b9b92;
+  --color-paper: #f7f6f2;
+  --color-paper-2: #efede7;
+  --color-paper-3: #e4e1d8;
+  --color-accent: #2d5be3;
+  --color-accent-hover: #1e46c7;
+  --color-success: #1a7a4a;
+  --color-warn: #b45309;
+  --color-danger: #c0392b;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html {
+  font-family: var(--font-sans);
+  background: var(--color-paper);
+  color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body { margin: 0; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--color-paper-2); }
+::-webkit-scrollbar-thumb { background: var(--color-paper-3); border-radius: 3px; }
+
+/* Selection */
+::selection { background: #2d5be320; color: var(--color-ink); }

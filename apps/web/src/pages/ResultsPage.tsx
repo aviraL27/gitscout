@@ -5,7 +5,7 @@ import { getSearchJob } from "../lib/api";
 import { CandidateCard } from "../components/CandidateCard";
 import { ProgressBar } from "../components/ProgressBar";
 
-type SortKey = "default" | "followers" | "repos" | "stars";
+type SortKey = "relevance" | "followers" | "repos" | "stars";
 
 function sortCandidates(candidates: Candidate[], key: SortKey): Candidate[] {
   const copy = [...candidates];
@@ -16,30 +16,29 @@ function sortCandidates(candidates: Candidate[], key: SortKey): Candidate[] {
       return copy.sort((a, b) => b.publicRepos - a.publicRepos);
     case "stars":
       return copy.sort((a, b) => {
-        const aStars = a.repositories.reduce((s, r) => s + r.stars, 0);
-        const bStars = b.repositories.reduce((s, r) => s + r.stars, 0);
-        return bStars - aStars;
+        const aS = a.repositories.reduce((s, r) => s + r.stars, 0);
+        const bS = b.repositories.reduce((s, r) => s + r.stars, 0);
+        return bS - aS;
       });
-    case "default":
+    case "relevance":
     default:
-      return copy;
+      return copy.sort((a, b) => (b.relevanceScore ?? 0) - (a.relevanceScore ?? 0));
   }
 }
 
-const POLL_INTERVAL_MS = 2500;
+const POLL_MS = 2500;
 
 export function ResultsPage() {
   const { jobId } = useParams<{ jobId: string }>();
   const [job, setJob] = useState<SearchJob | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [sortKey, setSortKey] = useState<SortKey>("default");
+  const [sortKey, setSortKey] = useState<SortKey>("relevance");
   const [filterLang, setFilterLang] = useState("");
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     if (!jobId) return;
-
-    async function fetchJob() {
+    async function poll() {
       try {
         const data = await getSearchJob(jobId!);
         setJob(data);
@@ -51,22 +50,17 @@ export function ResultsPage() {
         if (intervalRef.current) clearInterval(intervalRef.current);
       }
     }
-
-    fetchJob();
-    intervalRef.current = setInterval(fetchJob, POLL_INTERVAL_MS);
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
+    poll();
+    intervalRef.current = setInterval(poll, POLL_MS);
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [jobId]);
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-950 text-white flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-red-400 text-lg mb-4">{error}</div>
-          <Link to="/" className="text-indigo-400 hover:text-indigo-300">
-            ← New search
-          </Link>
+      <div style={{ minHeight: "100vh", background: "var(--color-paper)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ color: "var(--color-danger)", marginBottom: "1rem" }}>{error}</div>
+          <Link to="/" style={{ color: "var(--color-accent)", textDecoration: "none" }}>← New search</Link>
         </div>
       </div>
     );
@@ -74,155 +68,249 @@ export function ResultsPage() {
 
   if (!job) {
     return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-        <div className="text-gray-400 animate-pulse">Loading…</div>
+      <div style={{ minHeight: "100vh", background: "var(--color-paper)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ color: "var(--color-ink-4)", fontFamily: "var(--font-mono)", fontSize: "0.875rem" }}>Loading…</div>
       </div>
     );
   }
 
   const isRunning = job.status !== "complete" && job.status !== "error";
-
-  // Collect all unique languages across candidates for filter
   const allLangs = [...new Set(job.candidates.flatMap((c) => c.languages))].sort();
-
-  // Apply filter then sort
-  const filtered = filterLang
-    ? job.candidates.filter((c) => c.languages.includes(filterLang))
-    : job.candidates;
+  const filtered = filterLang ? job.candidates.filter((c) => c.languages.includes(filterLang)) : job.candidates;
   const displayed = sortCandidates(filtered, sortKey);
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100 px-4 py-8">
-      <div className="max-w-4xl mx-auto">
-        {/* Nav */}
-        <div className="flex items-center gap-3 mb-6">
-          <Link
-            to="/"
-            className="text-gray-400 hover:text-white text-sm transition-colors"
-          >
-            ← New search
-          </Link>
-          <span className="text-gray-700">/</span>
-          <span className="text-white font-medium flex items-center gap-1">
-            🔭 GitScout
-          </span>
+    <div style={{ minHeight: "100vh", background: "var(--color-paper)" }}>
+      {/* Sticky header */}
+      <header style={{
+        position: "sticky",
+        top: 0,
+        zIndex: 10,
+        background: "rgba(247,246,242,0.92)",
+        backdropFilter: "blur(8px)",
+        borderBottom: "1px solid var(--color-paper-3)",
+        padding: "0.875rem 2rem",
+        display: "flex",
+        alignItems: "center",
+        gap: "1rem",
+      }}>
+        <Link to="/" style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "0.5rem",
+          textDecoration: "none",
+          color: "var(--color-ink-3)",
+          fontSize: "0.875rem",
+        }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+          New search
+        </Link>
+        <div style={{ width: 1, height: 16, background: "var(--color-paper-3)" }} />
+        <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style={{ color: "var(--color-accent)" }}>
+            <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" fill="none" />
+            <path d="M20 20l-3-3" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+          </svg>
+          <span style={{ fontWeight: 700, color: "var(--color-ink)", fontSize: "0.875rem" }}>GitScout</span>
         </div>
+        <div style={{ flex: 1 }} />
+        {job.status === "complete" && (
+          <span style={{ fontSize: "0.8125rem", color: "var(--color-ink-3)", fontFamily: "var(--font-mono)" }}>
+            {displayed.length} candidates
+          </span>
+        )}
+      </header>
 
-        {/* Search summary */}
-        <div className="mb-5">
-          <h2 className="text-xl font-semibold text-white">
+      <div style={{ maxWidth: 760, margin: "0 auto", padding: "2rem 1.5rem" }}>
+        {/* Query summary */}
+        <div style={{ marginBottom: "1.5rem" }}>
+          <h1 style={{
+            fontSize: "1.25rem",
+            fontWeight: 700,
+            letterSpacing: "-0.03em",
+            color: "var(--color-ink)",
+            margin: 0,
+            lineHeight: 1.3,
+          }}>
             {job.criteria.requirement}
-          </h2>
-          <div className="flex items-center gap-3 mt-1 text-sm text-gray-400">
-            <span>📍 {job.criteria.locationScope}</span>
-            {job.criteria.languages && job.criteria.languages.length > 0 && (
-              <span>
-                💻 {job.criteria.languages.join(", ")}
+          </h1>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.625rem", marginTop: "0.625rem" }}>
+            <span style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.25rem",
+              padding: "0.25rem 0.625rem",
+              borderRadius: "100px",
+              border: "1px solid var(--color-paper-3)",
+              fontSize: "0.75rem",
+              color: "var(--color-ink-3)",
+              background: "#fff",
+            }}>
+              📍 {job.criteria.locationScope}
+            </span>
+            {job.criteria.languages?.map((l) => (
+              <span key={l} style={{
+                display: "inline-flex",
+                padding: "0.25rem 0.625rem",
+                borderRadius: "100px",
+                border: "1px solid var(--color-paper-3)",
+                fontSize: "0.75rem",
+                color: "var(--color-ink-3)",
+                background: "#fff",
+              }}>
+                {l}
               </span>
-            )}
+            ))}
             {job.plan && (
-              <span>🔑 {job.plan.githubQueries.length} queries</span>
+              <span style={{
+                display: "inline-flex",
+                padding: "0.25rem 0.625rem",
+                borderRadius: "100px",
+                border: "1px solid var(--color-paper-3)",
+                fontSize: "0.75rem",
+                color: "var(--color-ink-4)",
+                background: "#fff",
+                fontFamily: "var(--font-mono)",
+              }}>
+                {job.plan.githubQueries.length} queries
+              </span>
             )}
           </div>
         </div>
 
         {/* Progress */}
         {(isRunning || job.status === "error") && (
-          <div className="mb-6">
+          <div style={{ marginBottom: "1.5rem" }}>
             <ProgressBar status={job.status} progress={job.progress} />
           </div>
         )}
 
-        {/* Complete summary */}
-        {job.status === "complete" && (
-          <div className="bg-green-900/20 border border-green-800 rounded-xl px-5 py-3 mb-6 flex items-center gap-3">
-            <span className="text-green-400 text-lg">✅</span>
-            <span className="text-green-300 font-medium">
-              Found {job.candidates.length} candidates
-            </span>
-            <span className="text-gray-500 text-sm ml-auto">
-              {job.plan && `${job.plan.githubQueries.length} GitHub queries executed`}
+        {/* Complete banner */}
+        {job.status === "complete" && job.candidates.length > 0 && (
+          <div style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "0.75rem",
+            padding: "0.75rem 1rem",
+            background: "#f0fdf4",
+            border: "1px solid #bbf7d0",
+            borderRadius: "10px",
+            marginBottom: "1.5rem",
+            fontSize: "0.875rem",
+          }}>
+            <span style={{ color: "#16a34a", fontWeight: 600 }}>✓ {job.candidates.length} candidates found</span>
+            <span style={{ color: "var(--color-ink-4)", marginLeft: "auto", fontFamily: "var(--font-mono)", fontSize: "0.75rem" }}>
+              Gemma 4 evaluated
             </span>
           </div>
         )}
 
         {/* Controls */}
         {job.candidates.length > 0 && (
-          <div className="flex flex-wrap items-center gap-3 mb-5">
-            {/* Sort */}
-            <div className="flex items-center gap-2 text-sm">
-              <span className="text-gray-400">Sort:</span>
-              {(["default", "followers", "repos", "stars"] as SortKey[]).map(
-                (key) => (
-                  <button
-                    key={key}
-                    onClick={() => setSortKey(key)}
-                    className={`px-2.5 py-1 rounded-lg border text-xs transition-all ${
-                      sortKey === key
-                        ? "bg-indigo-600 border-indigo-500 text-white"
-                        : "bg-gray-800 border-gray-700 text-gray-300 hover:border-gray-500"
-                    }`}
-                  >
-                    {key === "default"
-                      ? "Default"
-                      : key === "followers"
-                      ? "Followers"
-                      : key === "repos"
-                      ? "Repos"
-                      : "Stars"}
-                  </button>
-                )
-              )}
+          <div style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "0.5rem",
+            marginBottom: "1.25rem",
+            flexWrap: "wrap",
+          }}>
+            {/* Sort buttons */}
+            <div style={{ display: "flex", gap: "0.25rem" }}>
+              {(["relevance", "followers", "repos", "stars"] as SortKey[]).map((key) => (
+                <button
+                  key={key}
+                  onClick={() => setSortKey(key)}
+                  style={{
+                    padding: "0.375rem 0.75rem",
+                    borderRadius: "8px",
+                    border: `1px solid ${sortKey === key ? "var(--color-ink)" : "var(--color-paper-3)"}`,
+                    background: sortKey === key ? "var(--color-ink)" : "transparent",
+                    color: sortKey === key ? "#fff" : "var(--color-ink-3)",
+                    fontSize: "0.75rem",
+                    fontWeight: 500,
+                    cursor: "pointer",
+                    fontFamily: "var(--font-sans)",
+                    transition: "all 0.1s",
+                  }}
+                >
+                  {key === "relevance" ? "Relevance" : key === "followers" ? "Followers" : key === "repos" ? "Repos" : "Stars"}
+                </button>
+              ))}
             </div>
 
             {/* Language filter */}
             {allLangs.length > 0 && (
-              <div className="flex items-center gap-2 text-sm ml-auto">
-                <span className="text-gray-400">Language:</span>
-                <select
-                  value={filterLang}
-                  onChange={(e) => setFilterLang(e.target.value)}
-                  className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1 text-sm text-white focus:outline-none"
-                >
-                  <option value="">All</option>
-                  {allLangs.map((l) => (
-                    <option key={l} value={l}>
-                      {l}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <select
+                value={filterLang}
+                onChange={(e) => setFilterLang(e.target.value)}
+                style={{
+                  marginLeft: "auto",
+                  padding: "0.375rem 0.75rem",
+                  borderRadius: "8px",
+                  border: "1px solid var(--color-paper-3)",
+                  background: "#fff",
+                  fontSize: "0.75rem",
+                  color: "var(--color-ink-2)",
+                  outline: "none",
+                }}
+              >
+                <option value="">All languages</option>
+                {allLangs.map((l) => <option key={l} value={l}>{l}</option>)}
+              </select>
             )}
 
-            <span className="text-gray-500 text-xs">
-              {displayed.length} of {job.candidates.length}
+            <span style={{ fontSize: "0.75rem", color: "var(--color-ink-4)", fontFamily: "var(--font-mono)" }}>
+              {displayed.length}/{job.candidates.length}
             </span>
           </div>
         )}
 
-        {/* Candidate list */}
+        {/* Results */}
         {displayed.length > 0 ? (
-          <div className="space-y-4">
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
             {displayed.map((c) => (
-              <CandidateCard key={c.id} candidate={c} />
+              <CandidateCard
+                key={c.id}
+                candidate={c}
+                jobId={jobId}
+                requirement={job.criteria.requirement}
+              />
             ))}
           </div>
         ) : (
           !isRunning && (
-            <div className="text-center py-16 text-gray-500">
-              <div className="text-4xl mb-3">🔍</div>
-              <div>No candidates found. Try broadening your search.</div>
+            <div style={{ textAlign: "center", padding: "4rem 0", color: "var(--color-ink-4)" }}>
+              <div style={{ fontSize: "2rem", marginBottom: "0.75rem" }}>◎</div>
+              <div style={{ fontSize: "0.9375rem" }}>No candidates matched. Try broadening your search.</div>
             </div>
           )
         )}
 
-        {/* Plan debug info */}
+        {/* Debug plan */}
         {job.plan && (
-          <details className="mt-8 text-xs text-gray-600">
-            <summary className="cursor-pointer hover:text-gray-400">
-              Debug: Search plan
+          <details style={{ marginTop: "2rem" }}>
+            <summary style={{
+              cursor: "pointer",
+              fontSize: "0.75rem",
+              color: "var(--color-ink-4)",
+              fontFamily: "var(--font-mono)",
+              listStyle: "none",
+            }}>
+              ▸ Debug: search plan ({job.plan.githubQueries.length} queries)
             </summary>
-            <pre className="mt-2 bg-gray-900 border border-gray-800 rounded-lg p-4 overflow-auto">
+            <pre style={{
+              marginTop: "0.5rem",
+              background: "#fff",
+              border: "1px solid var(--color-paper-3)",
+              borderRadius: "8px",
+              padding: "1rem",
+              fontSize: "0.75rem",
+              color: "var(--color-ink-3)",
+              overflow: "auto",
+              fontFamily: "var(--font-mono)",
+            }}>
               {JSON.stringify(job.plan, null, 2)}
             </pre>
           </details>

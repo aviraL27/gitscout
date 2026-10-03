@@ -1,8 +1,10 @@
 import path from "path";
 import dotenv from "dotenv";
-// Load .env from repo root first, then fall back to local
-dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
-dotenv.config(); // local .env fallback
+// Load .env from monorepo root (where npm run dev:api is invoked from)
+// process.cwd() is reliable with tsx and npm workspaces
+dotenv.config({ path: path.join(process.cwd(), "../../.env") });
+dotenv.config({ path: path.join(process.cwd(), ".env") }); // local fallback
+
 
 import express from "express";
 import cors from "cors";
@@ -33,14 +35,29 @@ app.get("/api/health", async (_req, res) => {
   } catch {
     rateLimit = github.getRateLimit();
   }
+
+  // Quick Ollama check
+  const ollamaUrl = process.env.OLLAMA_BASE_URL ?? "http://localhost:11434";
+  const ollamaModel = process.env.OLLAMA_MODEL ?? "gemma4:12b";
+  let ollamaAvailable = false;
+  try {
+    const r = await fetch(`${ollamaUrl}/api/tags`, { signal: AbortSignal.timeout(2000) });
+    if (r.ok) {
+      const data = await r.json() as { models?: Array<{ name: string }> };
+      ollamaAvailable = (data.models ?? []).some((m) => m.name === ollamaModel || m.name.startsWith(ollamaModel.split(":")[0]));
+    }
+  } catch { /* offline */ }
+
   res.json({
     status: "ok",
-    github: {
-      authenticated: !!process.env.GITHUB_TOKEN,
-      rateLimit,
+    github: { authenticated: !!process.env.GITHUB_TOKEN, rateLimit },
+    ai: {
+      primary: { provider: "ollama", model: ollamaModel, available: ollamaAvailable },
+      fallback: { provider: "gemini-api", available: !!process.env.GEMINI_API_KEY },
     },
   });
 });
+
 
 // ─── 404 catch-all ───────────────────────────────────────────────────────────
 
