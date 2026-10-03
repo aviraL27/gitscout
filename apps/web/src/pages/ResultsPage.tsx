@@ -225,6 +225,18 @@ export function ResultsPage() {
             fontSize: "0.875rem",
           }}>
             <span style={{ color: "#16a34a", fontWeight: 600 }}>✓ {job.candidates.length} candidates found</span>
+            {job.candidates.filter(c => !!c.email).length > 0 && (
+              <span style={{
+                background: "#dcfce7",
+                color: "#15803d",
+                padding: "2px 8px",
+                borderRadius: "100px",
+                fontSize: "0.75rem",
+                fontWeight: 600,
+              }}>
+                ✉ {job.candidates.filter(c => !!c.email).length} direct emails found
+              </span>
+            )}
             <span style={{ color: "var(--color-ink-4)", marginLeft: "auto", fontFamily: "var(--font-mono)", fontSize: "0.75rem" }}>
               Gemma 4 evaluated
             </span>

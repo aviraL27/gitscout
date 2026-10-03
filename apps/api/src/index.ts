@@ -4,7 +4,9 @@ import express from "express";
 import cors from "cors";
 import { searchRouter } from "./routes/search";
 import { candidatesRouter } from "./routes/candidates";
+import { emailRouter } from "./routes/email";
 import { GitHubClient } from "./github/GitHubClient";
+import { emailService } from "./email/EmailService";
 
 const app = express();
 const PORT = Number(process.env.PORT ?? 3001);
@@ -18,6 +20,7 @@ app.use(express.json());
 
 app.use("/api/search", searchRouter);
 app.use("/api/candidates", candidatesRouter);
+app.use("/api/email", emailRouter);
 
 // ─── Health + rate-limit info ─────────────────────────────────────────────────
 
@@ -49,7 +52,11 @@ app.get("/api/health", async (_req, res) => {
       primary: { provider: "gemma-4-api", model: "gemma-4-31b-it", available: !!process.env.GEMINI_API_KEY },
       fallback: { provider: "ollama-local", model: ollamaModel, available: ollamaAvailable },
     },
-
+    email: {
+      provider: "gmail-smtp",
+      configured: emailService.isConfigured(),
+      senderEmail: emailService.getSenderEmail(),
+    },
   });
 });
 
@@ -65,5 +72,6 @@ app.use((_req, res) => {
 app.listen(PORT, () => {
   console.log(`\n🚀 GitScout API running on http://localhost:${PORT}`);
   console.log(`   GitHub token: ${process.env.GITHUB_TOKEN ? "✅ configured" : "⚠️  not set (60 req/hr limit)"}`);
+  console.log(`   Gmail SMTP:   ${emailService.isConfigured() ? `✅ configured (${emailService.getSenderEmail()})` : "❌ not configured"}`);
   console.log(`   Health check: http://localhost:${PORT}/api/health\n`);
 });
