@@ -46,6 +46,11 @@ export interface Candidate {
     recentActivity: boolean;
   };
 
+  outreachDraft?: {
+    subject: string;
+    body: string;
+  };
+
   source: "github";
   createdAt: Date;
 }

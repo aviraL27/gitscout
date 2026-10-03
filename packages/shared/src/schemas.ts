@@ -48,6 +48,13 @@ export const CandidateSchema = z.object({
     })
     .optional(),
 
+  outreachDraft: z
+    .object({
+      subject: z.string(),
+      body: z.string(),
+    })
+    .optional(),
+
   source: z.literal("github"),
   createdAt: z.coerce.date(),
 });

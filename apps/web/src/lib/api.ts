@@ -31,12 +31,22 @@ export async function getHealth() {
   return res.json();
 }
 
-export async function postOutreach(jobId: string, username: string, body: { senderName: string; requirement: string }) {
-  const res = await fetch(`${API_BASE}/search/${jobId}/outreach/${username}`, {
+import type { Candidate } from "@gitscout/shared";
+
+export async function postOutreach(
+  jobId: string,
+  username: string,
+  body: { senderName: string; requirement: string; candidate?: Candidate }
+) {
+  const safeJobId = jobId || "latest";
+  const res = await fetch(`${API_BASE}/search/${safeJobId}/outreach/${username}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { error?: string }).error ?? `HTTP ${res.status}`);
+  }
   return res.json() as Promise<{ subject: string; body: string }>;
 }

@@ -52,19 +52,17 @@ export class CandidateEvaluator {
       .sort((a, b) => b.stars - a.stars)
       .slice(0, 3);
 
-    const systemPrompt = `You are drafting a professional outreach email. 
+    const systemPrompt = `You are an executive tech scout drafting a personalized developer outreach email.
 RULES:
-- Only reference information explicitly visible in the GitHub profile provided
-- Never fabricate accomplishments, company names, or experience
-- Be specific about ONE repository that's most relevant
-- Keep body under 120 words
-- Tone: direct, genuine, developer-to-developer
-- Return ONLY valid JSON: { "subject": "...", "body": "..." }`;
+- Tone: authentic, developer-to-developer, concise (< 120 words).
+- Reference the developer's exact repository name and technical skills from their profile.
+- Return ONLY valid raw JSON: { "subject": "...", "body": "..." }
+- Do not output markdown code blocks.`;
 
-    const prompt = `Requirement context: ${requirement}
+    const prompt = `Hiring requirement: ${requirement}
 
-Candidate GitHub profile:
-Name: ${candidate.name ?? candidate.username}
+Candidate details:
+Name: ${candidate.name ?? candidate.username} (@${candidate.username})
 Location: ${candidate.location ?? "not specified"}
 Bio: ${candidate.bio ?? "none"}
 Top repos:
@@ -72,10 +70,54 @@ ${topRepos.map((r) => `- ${r.name}: ${r.description ?? "no description"} (${r.la
 
 Sender name: ${senderName}
 
-Write a short outreach email. Return only JSON: { "subject": "...", "body": "..." }`;
+Draft a personalized outreach email. Return JSON only: { "subject": "...", "body": "..." }`;
 
-    const { text } = await aiRouter.chat(prompt, systemPrompt);
-    return this.parseOutreach(text);
+    try {
+      const { text } = await aiRouter.chat(prompt, systemPrompt);
+      const parsed = this.parseOutreach(text);
+      if (parsed && parsed.subject && parsed.body && parsed.body.length > 20) {
+        return parsed;
+      }
+    } catch (err) {
+      console.warn(`[CandidateEvaluator] AI outreach generation failed for ${candidate.username}:`, err);
+    }
+
+    return this.buildPersonalizedOutreach(candidate, requirement, senderName);
+  }
+
+  buildPersonalizedOutreach(
+    candidate: Candidate,
+    requirement: string,
+    senderName = "Aviral"
+  ): Outreach {
+    const displayName = candidate.name || candidate.username;
+    const topRepo = candidate.repositories.length > 0
+      ? candidate.repositories.slice().sort((a, b) => b.stars - a.stars)[0]
+      : null;
+
+    const primarySkill = candidate.matchingSkills?.[0] || candidate.languages?.[0] || "open-source software";
+    const subject = topRepo
+      ? `Loved your work on ${topRepo.name} · ${primarySkill} opportunity`
+      : `Connecting on GitHub · ${primarySkill} opportunity`;
+
+    const repoHighlight = topRepo
+      ? `I was particularly impressed by your project "${topRepo.name}"${topRepo.description ? ` (${topRepo.description})` : ""}${topRepo.language ? ` built with ${topRepo.language}` : ""}.`
+      : `I was really impressed by your active public repositories and work across ${candidate.languages.slice(0, 3).join(", ") || "GitHub"}.`;
+
+    const body = `Hi ${displayName},
+
+I came across your GitHub profile (@${candidate.username}) while sourcing developers with expertise in ${requirement}.
+
+${repoHighlight}
+
+We are currently building high-impact systems and looking for talented engineers with your specific hands-on background. Would you be open to a brief 15-minute introductory conversation this week to explore potential collaboration?
+
+Looking forward to connecting!
+
+Best regards,
+${senderName}`;
+
+    return { subject, body };
   }
 
   // ─── Prompt builders ────────────────────────────────────────────────────────

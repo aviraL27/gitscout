@@ -74,21 +74,50 @@ searchRouter.get("/", async (_req: Request, res: Response) => {
 // ─── POST /api/search/:id/outreach/:username ─────────────────────────────────
 
 searchRouter.post("/:id/outreach/:username", async (req: Request, res: Response) => {
-  const job = await jobStore.get(req.params.id);
-  if (!job) { res.status(404).json({ error: "Job not found" }); return; }
+  const username = req.params.username;
+  let candidate: Candidate | undefined = req.body.candidate;
 
-  const candidate = job.candidates.find((c) => c.username === req.params.username);
-  if (!candidate) { res.status(404).json({ error: "Candidate not found in this job" }); return; }
+  if (!candidate) {
+    const job = await jobStore.get(req.params.id);
+    if (job) {
+      candidate = job.candidates.find((c) => c.username === username);
+    }
+  }
+
+  // If candidate still not found, fetch directly via discovery
+  if (!candidate) {
+    try {
+      const enriched = await discovery.enrichAll([
+        { username, profileUrl: `https://github.com/${username}`, source: "github" },
+      ]);
+      if (enriched[0]) candidate = enriched[0];
+    } catch { /* proceed */ }
+  }
+
+  const requirement = req.body.requirement || "Senior software developer";
+  const senderName = req.body.senderName || "Aviral";
+
+  if (!candidate) {
+    candidate = {
+      id: username,
+      username,
+      profileUrl: `https://github.com/${username}`,
+      followers: 0,
+      publicRepos: 0,
+      languages: [],
+      topics: [],
+      repositories: [],
+      source: "github",
+      createdAt: new Date(),
+    };
+  }
 
   try {
-    const outreach = await candidateEvaluator.generateOutreach(
-      job.criteria.requirement,
-      candidate,
-      req.body.senderName ?? "Aviral"
-    );
+    const outreach = await candidateEvaluator.generateOutreach(requirement, candidate, senderName);
     res.json(outreach);
-  } catch (err) {
-    res.status(500).json({ error: String(err) });
+  } catch {
+    const fallback = candidateEvaluator.buildPersonalizedOutreach(candidate, requirement, senderName);
+    res.json(fallback);
   }
 });
 
@@ -165,6 +194,11 @@ async function runSearchPipeline(
           matchingSkills: evaluation.matchingSkills,
           evidence: evaluation.evidence,
           signals: evaluation.signals,
+          outreachDraft: candidateEvaluator.buildPersonalizedOutreach(
+            candidate,
+            criteria.requirement,
+            "Aviral"
+          ),
         };
         evaluatedCandidates.push(enriched);
         evaluatedCount++;
@@ -180,8 +214,16 @@ async function runSearchPipeline(
         return enriched;
       } catch (err) {
         console.error(`[search] Evaluation failed for ${candidate.username}:`, err);
-        evaluatedCandidates.push(candidate);
-        return candidate;
+        const candidateWithOutreach: Candidate = {
+          ...candidate,
+          outreachDraft: candidateEvaluator.buildPersonalizedOutreach(
+            candidate,
+            criteria.requirement,
+            "Aviral"
+          ),
+        };
+        evaluatedCandidates.push(candidateWithOutreach);
+        return candidateWithOutreach;
       }
     })
   );

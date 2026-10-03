@@ -48,9 +48,45 @@ function ScoreRing({ score }: { score: number }) {
   );
 }
 
+function generateClientOutreach(candidate: Candidate, requirement?: string): { subject: string; body: string } {
+  const displayName = candidate.name || candidate.username;
+  const topRepo = candidate.repositories.length > 0
+    ? [...candidate.repositories].sort((a, b) => b.stars - a.stars)[0]
+    : null;
+  const primarySkill = candidate.matchingSkills?.[0] || candidate.languages?.[0] || "software engineering";
+  const reqText = requirement || "high-impact development roles";
+
+  const subject = topRepo
+    ? `Loved your work on ${topRepo.name} · ${primarySkill} opportunity`
+    : `Connecting on GitHub · ${primarySkill} opportunity`;
+
+  const repoHighlight = topRepo
+    ? `I was particularly impressed by your project "${topRepo.name}"${topRepo.description ? ` (${topRepo.description})` : ""}${topRepo.language ? ` built with ${topRepo.language}` : ""}.`
+    : `I was really impressed by your active public contributions across ${candidate.languages.slice(0, 3).join(", ") || "GitHub"}.`;
+
+  const body = `Hi ${displayName},
+
+I came across your GitHub profile (@${candidate.username}) while sourcing developers with expertise in ${reqText}.
+
+${repoHighlight}
+
+We are currently building high-impact systems and looking for talented engineers with your specific hands-on background. Would you be open to a brief 15-minute introductory conversation this week to explore potential collaboration?
+
+Looking forward to connecting!
+
+Best regards,
+Aviral`;
+
+  return { subject, body };
+}
+
 export function CandidateCard({ candidate, jobId, requirement }: Props) {
   const [expanded, setExpanded] = useState(false);
-  const [outreach, setOutreach] = useState<{ subject: string; body: string } | null>(null);
+  const initialOutreach = candidate.outreachDraft ?? generateClientOutreach(candidate, requirement);
+  const [outreach, setOutreach] = useState<{ subject: string; body: string }>(initialOutreach);
+  const [showOutreach, setShowOutreach] = useState(false);
+  const [copiedSubject, setCopiedSubject] = useState(false);
+  const [copiedBody, setCopiedBody] = useState(false);
   const [loadingOutreach, setLoadingOutreach] = useState(false);
 
   const topRepos = [...candidate.repositories]
@@ -58,15 +94,20 @@ export function CandidateCard({ candidate, jobId, requirement }: Props) {
     .slice(0, expanded ? 6 : 3);
 
   async function generateOutreach() {
-    if (!jobId) return;
     setLoadingOutreach(true);
+    setShowOutreach(true);
     try {
-      const data = await postOutreach(jobId, candidate.username, {
+      const data = await postOutreach(jobId ?? "latest", candidate.username, {
         senderName: "Aviral",
         requirement: requirement ?? "Senior developer",
+        candidate,
       });
-      setOutreach(data);
-    } catch { /* noop */ }
+      if (data?.subject && data?.body) {
+        setOutreach(data);
+      }
+    } catch {
+      // Fallback is already initialized
+    }
     setLoadingOutreach(false);
   }
 
@@ -268,50 +309,165 @@ export function CandidateCard({ candidate, jobId, requirement }: Props) {
       )}
 
       {/* Outreach */}
-      {outreach && (
+      {showOutreach && (
         <div style={{
-          marginTop: "1rem",
+          marginTop: "1.125rem",
           background: "var(--color-paper)",
           border: "1px solid var(--color-paper-3)",
-          borderRadius: "8px",
-          padding: "0.875rem 1rem",
+          borderRadius: "10px",
+          padding: "1rem 1.25rem",
         }}>
-          <div style={{ fontSize: "0.75rem", fontWeight: 600, color: "var(--color-ink-3)", marginBottom: "0.375rem" }}>
-            DRAFT OUTREACH
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.75rem", flexWrap: "wrap", gap: "0.5rem" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <span style={{ fontSize: "0.875rem" }}>✉️</span>
+              <span style={{ fontSize: "0.75rem", fontWeight: 700, letterSpacing: "0.05em", color: "var(--color-ink-2)", textTransform: "uppercase" }}>
+                Personalized Outreach Email
+              </span>
+              <span style={{
+                fontSize: "0.6875rem",
+                background: "var(--color-paper-2)",
+                color: "var(--color-ink-3)",
+                padding: "2px 8px",
+                borderRadius: "100px",
+                fontWeight: 600,
+              }}>
+                @{candidate.username}
+              </span>
+            </div>
+
+            <button
+              onClick={generateOutreach}
+              disabled={loadingOutreach}
+              style={{
+                padding: "0.25rem 0.625rem",
+                borderRadius: "6px",
+                border: "1px solid var(--color-paper-3)",
+                background: "#fff",
+                fontSize: "0.75rem",
+                color: "var(--color-accent)",
+                cursor: loadingOutreach ? "wait" : "pointer",
+                fontWeight: 600,
+              }}
+            >
+              {loadingOutreach ? "Refining with Gemma 4…" : "⚡ Enhance with AI"}
+            </button>
           </div>
-          <div style={{ fontSize: "0.8125rem", fontWeight: 600, color: "var(--color-ink)", marginBottom: "0.5rem" }}>
-            {outreach.subject}
-          </div>
-          <pre style={{
-            fontSize: "0.8125rem",
-            color: "var(--color-ink-2)",
-            whiteSpace: "pre-wrap",
-            margin: 0,
-            lineHeight: 1.6,
-            fontFamily: "var(--font-sans)",
-          }}>
-            {outreach.body}
-          </pre>
-          <button
-            onClick={() => navigator.clipboard.writeText(`Subject: ${outreach.subject}\n\n${outreach.body}`)}
-            style={{
-              marginTop: "0.75rem",
-              padding: "0.375rem 0.75rem",
-              borderRadius: "6px",
+
+          {/* Subject */}
+          <div style={{ marginBottom: "0.75rem" }}>
+            <div style={{ fontSize: "0.6875rem", fontWeight: 600, color: "var(--color-ink-4)", textTransform: "uppercase", marginBottom: "0.25rem" }}>
+              Subject
+            </div>
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              background: "#fff",
               border: "1px solid var(--color-paper-3)",
-              background: "transparent",
-              fontSize: "0.75rem",
-              color: "var(--color-ink-3)",
-              cursor: "pointer",
-            }}
-          >
-            Copy to clipboard
-          </button>
+              borderRadius: "6px",
+              padding: "0.5rem 0.75rem",
+              gap: "0.5rem",
+            }}>
+              <span style={{ fontSize: "0.8125rem", fontWeight: 600, color: "var(--color-ink)" }}>
+                {outreach.subject}
+              </span>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(outreach.subject);
+                  setCopiedSubject(true);
+                  setTimeout(() => setCopiedSubject(false), 2000);
+                }}
+                style={{
+                  padding: "0.2rem 0.5rem",
+                  borderRadius: "4px",
+                  border: "1px solid var(--color-paper-3)",
+                  background: "transparent",
+                  fontSize: "0.6875rem",
+                  color: copiedSubject ? "var(--color-accent)" : "var(--color-ink-3)",
+                  cursor: "pointer",
+                  flexShrink: 0,
+                }}
+              >
+                {copiedSubject ? "✓ Copied" : "Copy"}
+              </button>
+            </div>
+          </div>
+
+          {/* Body */}
+          <div>
+            <div style={{ fontSize: "0.6875rem", fontWeight: 600, color: "var(--color-ink-4)", textTransform: "uppercase", marginBottom: "0.25rem" }}>
+              Message Body
+            </div>
+            <div style={{
+              background: "#fff",
+              border: "1px solid var(--color-paper-3)",
+              borderRadius: "6px",
+              padding: "0.75rem",
+            }}>
+              <pre style={{
+                fontSize: "0.8125rem",
+                color: "var(--color-ink-2)",
+                whiteSpace: "pre-wrap",
+                margin: 0,
+                lineHeight: 1.6,
+                fontFamily: "var(--font-sans)",
+              }}>
+                {outreach.body}
+              </pre>
+            </div>
+          </div>
+
+          {/* Email Action Buttons */}
+          <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.875rem", flexWrap: "wrap" }}>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(`Subject: ${outreach.subject}\n\n${outreach.body}`);
+                setCopiedBody(true);
+                setTimeout(() => setCopiedBody(false), 2000);
+              }}
+              style={{
+                padding: "0.375rem 0.75rem",
+                borderRadius: "6px",
+                border: "1px solid var(--color-paper-3)",
+                background: "#fff",
+                fontSize: "0.75rem",
+                fontWeight: 600,
+                color: copiedBody ? "var(--color-accent)" : "var(--color-ink-2)",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "0.25rem",
+              }}
+            >
+              <span>{copiedBody ? "✓" : "📋"}</span>
+              <span>{copiedBody ? "Copied to clipboard!" : "Copy Full Email"}</span>
+            </button>
+
+            <a
+              href={`mailto:?subject=${encodeURIComponent(outreach.subject)}&body=${encodeURIComponent(outreach.body)}`}
+              style={{
+                padding: "0.375rem 0.75rem",
+                borderRadius: "6px",
+                border: "1px solid var(--color-paper-3)",
+                background: "#fff",
+                fontSize: "0.75rem",
+                fontWeight: 600,
+                color: "var(--color-ink-2)",
+                textDecoration: "none",
+                display: "flex",
+                alignItems: "center",
+                gap: "0.25rem",
+              }}
+            >
+              <span>🚀</span>
+              <span>Open in Mail Client</span>
+            </a>
+          </div>
         </div>
       )}
 
       {/* Actions */}
-      <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem" }}>
+      <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem", flexWrap: "wrap", alignItems: "center" }}>
         <a
           href={candidate.profileUrl}
           target="_blank"
@@ -328,27 +484,29 @@ export function CandidateCard({ candidate, jobId, requirement }: Props) {
             transition: "all 0.1s",
           }}
         >
-          View GitHub
+          View GitHub ↗
         </a>
-        {jobId && (
-          <button
-            onClick={generateOutreach}
-            disabled={loadingOutreach}
-            style={{
-              padding: "0.4375rem 0.875rem",
-              borderRadius: "8px",
-              border: "1px solid var(--color-paper-3)",
-              background: "transparent",
-              fontSize: "0.8125rem",
-              color: outreach ? "var(--color-accent)" : "var(--color-ink-2)",
-              cursor: loadingOutreach ? "wait" : "pointer",
-              fontWeight: 500,
-              fontFamily: "var(--font-sans)",
-            }}
-          >
-            {loadingOutreach ? "Writing…" : outreach ? "Regenerate" : "Generate outreach"}
-          </button>
-        )}
+        <button
+          onClick={() => setShowOutreach(!showOutreach)}
+          style={{
+            padding: "0.4375rem 0.875rem",
+            borderRadius: "8px",
+            border: showOutreach ? "1px solid var(--color-ink)" : "1px solid var(--color-paper-3)",
+            background: showOutreach ? "var(--color-ink)" : "transparent",
+            fontSize: "0.8125rem",
+            color: showOutreach ? "#fff" : "var(--color-ink)",
+            cursor: "pointer",
+            fontWeight: 500,
+            fontFamily: "var(--font-sans)",
+            display: "flex",
+            alignItems: "center",
+            gap: "0.375rem",
+            transition: "all 0.1s",
+          }}
+        >
+          <span>✉️</span>
+          <span>{showOutreach ? "Hide Email Draft" : "Draft Outreach Email"}</span>
+        </button>
         <button
           onClick={() => setExpanded(!expanded)}
           style={{
