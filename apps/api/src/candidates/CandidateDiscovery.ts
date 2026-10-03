@@ -11,9 +11,9 @@ import {
 } from "@gitscout/shared";
 import { GitHubClient } from "../github/GitHubClient";
 
-const CONCURRENCY_LIMIT = 3; // max parallel enrichment requests
-const REPOS_PER_USER = 30;   // how many repos to fetch per user
-const MAX_USERS_PER_QUERY = 30; // GitHub returns up to 100; we cap at 30 for MVP
+const CONCURRENCY_LIMIT = 4;        // max parallel enrichment requests
+const REPOS_PER_USER = 15;          // top 15 recent repos per candidate
+const MAX_CANDIDATES_TO_ENRICH = 20; // cap for MVP discovery to ensure fast, reliable searches
 
 /**
  * CandidateDiscovery
@@ -30,7 +30,7 @@ export class CandidateDiscovery implements CandidateSource {
   // ─── CandidateSource interface ────────────────────────────────────────────
 
   /**
-   * Run all planned GitHub queries and return deduplicated candidate references.
+   * Run planned GitHub queries and return deduplicated candidate references.
    */
   async search(
     _criteria: SearchCriteria,
@@ -41,18 +41,22 @@ export class CandidateDiscovery implements CandidateSource {
     const refs: CandidateReference[] = [];
 
     for (const query of plan.githubQueries) {
-      if (this.github.isRateLimited()) {
-        const waitMs = this.github.getRateLimitResetMs();
-        console.warn(`[CandidateDiscovery] Rate limited. Waiting ${Math.ceil(waitMs / 1000)}s...`);
-        onProgress?.(`Rate limit hit, waiting ${Math.ceil(waitMs / 1000)}s…`, refs.length);
-        await this.sleep(waitMs + 500);
+      if (refs.length >= MAX_CANDIDATES_TO_ENRICH) {
+        break; // Reached candidate discovery target
+      }
+
+      if (this.github.isRateLimited("search")) {
+        const waitMs = this.github.getRateLimitResetMs("search");
+        if (waitMs > 5000) {
+          console.warn(`[CandidateDiscovery] Search rate limit reached (${Math.ceil(waitMs / 1000)}s reset). Proceeding with ${refs.length} candidates.`);
+          break;
+        }
+        await this.sleep(waitMs + 200);
       }
 
       try {
         onProgress?.(`Searching: ${query}`, refs.length);
-        const result = await this.github.searchUsers(query, {
-          perPage: MAX_USERS_PER_QUERY,
-        });
+        const result = await this.github.searchUsers(query, { perPage: 15 });
 
         for (const item of result.items) {
           if (!seen.has(item.login)) {
@@ -62,14 +66,14 @@ export class CandidateDiscovery implements CandidateSource {
               source: "github",
               profileUrl: item.html_url,
             });
+            if (refs.length >= MAX_CANDIDATES_TO_ENRICH) break;
           }
         }
 
-        // GitHub Search API secondary rate limit: 1 request/second recommended
-        await this.sleep(1100);
+        // GitHub Search API rate limit courtesy pause (1 sec)
+        await this.sleep(1000);
       } catch (err) {
         console.error(`[CandidateDiscovery] Query failed: "${query}"`, err);
-        // Continue with remaining queries even if one fails
       }
     }
 
@@ -95,16 +99,21 @@ export class CandidateDiscovery implements CandidateSource {
     refs: CandidateReference[],
     onProgress?: (msg: string, enriched: number) => void
   ): Promise<Candidate[]> {
+    const targetRefs = refs.slice(0, MAX_CANDIDATES_TO_ENRICH);
     const limit = pLimit(CONCURRENCY_LIMIT);
     const results: Candidate[] = [];
     let enriched = 0;
 
-    const tasks = refs.map((ref) =>
+    const tasks = targetRefs.map((ref) =>
       limit(async () => {
         try {
-          if (this.github.isRateLimited()) {
-            const waitMs = this.github.getRateLimitResetMs();
-            await this.sleep(waitMs + 500);
+          if (this.github.isRateLimited("core")) {
+            const waitMs = this.github.getRateLimitResetMs("core");
+            if (waitMs > 5000) {
+              console.warn(`[CandidateDiscovery] Core rate limited. Halting further enrichment.`);
+              return null;
+            }
+            await this.sleep(waitMs + 200);
           }
 
           const candidate = await this.enrich(ref);
@@ -113,7 +122,7 @@ export class CandidateDiscovery implements CandidateSource {
           onProgress?.(`Enriched ${ref.username}`, enriched);
           return candidate;
         } catch (err) {
-          console.error(`[CandidateDiscovery] Failed to enrich ${ref.username}:`, err);
+          console.warn(`[CandidateDiscovery] Skipping ${ref.username}:`, (err as Error).message);
           return null;
         }
       })
@@ -128,66 +137,56 @@ export class CandidateDiscovery implements CandidateSource {
   private buildCandidate(user: GitHubUser, repos: GitHubRepo[]): Candidate {
     const ownedRepos = repos.filter((r) => !r.fork);
 
-    const languages = this.extractLanguages(ownedRepos);
-    const topics = this.extractTopics(ownedRepos);
-    const repositories = ownedRepos.map((r) => this.mapRepo(r));
+    // Aggregate unique languages used across repos
+    const languageCounts: Record<string, number> = {};
+    for (const r of ownedRepos) {
+      if (r.language) {
+        languageCounts[r.language] = (languageCounts[r.language] ?? 0) + 1;
+      }
+    }
+    const languages = Object.entries(languageCounts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([lang]) => lang);
+
+    // Aggregate unique topics across repos
+    const topicSet = new Set<string>();
+    for (const r of ownedRepos) {
+      for (const t of r.topics ?? []) {
+        topicSet.add(t.toLowerCase());
+      }
+    }
+    const topics = [...topicSet];
+
+    // Normalize repos to domain model
+    const normalizedRepos: Repository[] = ownedRepos.map((r) => ({
+      name: r.name,
+      url: r.html_url,
+      description: r.description ?? undefined,
+      language: r.language ?? undefined,
+      stars: r.stargazers_count,
+      forks: r.forks_count,
+      topics: r.topics ?? [],
+      updatedAt: r.updated_at ? new Date(r.updated_at) : undefined,
+    }));
 
     return {
-      id: `github:${user.login}`,
+      id: String(user.id),
       username: user.login,
       name: user.name ?? undefined,
       avatarUrl: user.avatar_url,
       profileUrl: user.html_url,
       bio: user.bio ?? undefined,
       location: user.location ?? undefined,
-      company: user.company?.replace(/^@/, "") ?? undefined,
-      website: user.blog ?? undefined,
-
+      company: user.company ?? undefined,
+      website: user.blog || undefined,
       followers: user.followers,
       publicRepos: user.public_repos,
-
       languages,
       topics,
-      repositories,
-
+      repositories: normalizedRepos,
       source: "github",
       createdAt: new Date(),
     };
-  }
-
-  private mapRepo(repo: GitHubRepo): Repository {
-    return {
-      name: repo.name,
-      url: repo.html_url,
-      description: repo.description ?? undefined,
-      language: repo.language ?? undefined,
-      stars: repo.stargazers_count,
-      forks: repo.forks_count,
-      topics: repo.topics ?? [],
-      updatedAt: repo.updated_at ? new Date(repo.updated_at) : undefined,
-    };
-  }
-
-  private extractLanguages(repos: GitHubRepo[]): string[] {
-    const counts: Record<string, number> = {};
-    for (const repo of repos) {
-      if (repo.language) {
-        counts[repo.language] = (counts[repo.language] ?? 0) + 1;
-      }
-    }
-    return Object.entries(counts)
-      .sort((a, b) => b[1] - a[1])
-      .map(([lang]) => lang);
-  }
-
-  private extractTopics(repos: GitHubRepo[]): string[] {
-    const seen = new Set<string>();
-    for (const repo of repos) {
-      for (const topic of repo.topics ?? []) {
-        seen.add(topic);
-      }
-    }
-    return [...seen];
   }
 
   private sleep(ms: number): Promise<void> {

@@ -130,6 +130,20 @@ async function runSearchPipeline(
     });
   });
 
+  if (candidates.length === 0) {
+    await jobStore.update(jobId, {
+      status: "complete",
+      candidates: [],
+      progress: {
+        message: refs.length > 0 ? "Enrichment completed, but no profiles could be retrieved" : "No candidates found for these queries",
+        found: refs.length,
+        enriched: 0,
+        evaluated: 0,
+      },
+    });
+    return;
+  }
+
   // Step 4: Evaluate with Gemma
   await jobStore.update(jobId, {
     status: "evaluating",
@@ -156,22 +170,24 @@ async function runSearchPipeline(
         evaluatedCount++;
         await jobStore.update(jobId, {
           progress: {
-            message: `Evaluating… (${evaluatedCount}/${candidates.length}) — ${candidate.username}`,
+            message: `Evaluating with Gemma… (${evaluatedCount}/${candidates.length}) — @${candidate.username}`,
             found: refs.length,
             enriched: enrichedCount,
             evaluated: evaluatedCount,
           },
+          candidates: [...evaluatedCandidates],
         });
         return enriched;
       } catch (err) {
         console.error(`[search] Evaluation failed for ${candidate.username}:`, err);
-        evaluatedCandidates.push(candidate); // keep un-scored
+        evaluatedCandidates.push(candidate);
         return candidate;
       }
     })
   );
 
   await Promise.all(evalTasks);
+
 
   // Sort by relevance score (highest first)
   const minRelevance = criteria.minRelevance ?? 0;

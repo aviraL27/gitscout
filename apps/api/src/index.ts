@@ -1,10 +1,4 @@
-import path from "path";
-import dotenv from "dotenv";
-// Load .env from monorepo root (where npm run dev:api is invoked from)
-// process.cwd() is reliable with tsx and npm workspaces
-dotenv.config({ path: path.join(process.cwd(), "../../.env") });
-dotenv.config({ path: path.join(process.cwd(), ".env") }); // local fallback
-
+import "./env";
 
 import express from "express";
 import cors from "cors";

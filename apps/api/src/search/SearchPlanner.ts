@@ -172,11 +172,15 @@ export class SearchPlanner {
 
   private extractFallbackKeywords(requirement: string): string[] {
     const stopWords = new Set([
-      "find", "me", "a", "an", "the", "who", "have", "has", "with",
-      "and", "or", "in", "for", "on", "at", "to", "of", "is", "are",
+      "find", "me", "a", "an", "the", "who", "have", "has", "had", "with",
+      "and", "or", "in", "for", "on", "at", "to", "of", "is", "are", "was",
       "that", "this", "from", "by", "can", "i", "want", "need", "looking",
-      "developers", "developer", "engineer", "engineers",
+      "into", "about", "like", "such", "some", "someone", "people", "folks",
+      "developers", "developer", "engineer", "engineers", "development",
+      "building", "built", "build", "work", "working", "works", "experience",
+      "experienced", "senior", "junior", "expert", "specialist", "good", "strong"
     ]);
+
     return requirement
       .split(/\s+/)
       .map((w) => w.replace(/[^a-zA-Z0-9+#]/g, "").trim())

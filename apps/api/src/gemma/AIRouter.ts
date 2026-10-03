@@ -40,12 +40,12 @@ export interface AIProvider {
 export class OllamaProvider implements AIProvider {
   name = "ollama-local";
 
-  private readonly baseUrl: string;
-  private readonly model: string;
+  private get baseUrl(): string {
+    return process.env.OLLAMA_BASE_URL ?? "http://localhost:11434";
+  }
 
-  constructor() {
-    this.baseUrl = process.env.OLLAMA_BASE_URL ?? "http://localhost:11434";
-    this.model = process.env.OLLAMA_MODEL ?? "gemma4:12b";
+  private get model(): string {
+    return process.env.OLLAMA_MODEL ?? "gemma4:12b";
   }
 
   async isAvailable(): Promise<boolean> {
@@ -80,7 +80,6 @@ export class OllamaProvider implements AIProvider {
           temperature: 0.1,  // Low temperature for structured JSON output
           num_predict: 1024,
         },
-        // Disable thinking for faster structured output
         think: false,
       }),
       signal: AbortSignal.timeout(120_000), // 2 min timeout for local inference
@@ -101,15 +100,12 @@ export class OllamaProvider implements AIProvider {
 export class GeminiProvider implements AIProvider {
   name = "gemini-api";
 
-  private readonly apiKey: string;
   private readonly model = "gemma-3-27b-it"; // Gemma model via Gemini API
 
-  constructor() {
-    this.apiKey = process.env.GEMINI_API_KEY ?? "";
-    if (!this.apiKey) {
-      console.warn("[GeminiProvider] No GEMINI_API_KEY set. Fallback will not work.");
-    }
+  private get apiKey(): string {
+    return process.env.GEMINI_API_KEY ?? "";
   }
+
 
   async chat(prompt: string, systemPrompt?: string): Promise<string> {
     if (!this.apiKey) throw new Error("[GeminiProvider] No API key configured");
