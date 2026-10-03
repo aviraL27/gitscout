@@ -84,6 +84,7 @@ export function CandidateCard({ candidate, jobId, requirement }: Props) {
   const [expanded, setExpanded] = useState(false);
   const initialOutreach = candidate.outreachDraft ?? generateClientOutreach(candidate, requirement);
   const [outreach, setOutreach] = useState<{ subject: string; body: string }>(initialOutreach);
+  const [recipientEmail, setRecipientEmail] = useState(candidate.email || "");
   const [showOutreach, setShowOutreach] = useState(false);
   const [copiedSubject, setCopiedSubject] = useState(false);
   const [copiedBody, setCopiedBody] = useState(false);
@@ -110,6 +111,14 @@ export function CandidateCard({ candidate, jobId, requirement }: Props) {
       // Fallback is already initialized
     }
     setLoadingOutreach(false);
+  }
+
+  function handleResetOutreach() {
+    const fresh = generateClientOutreach(candidate, requirement);
+    setOutreach(fresh);
+    if (candidate.email) {
+      setRecipientEmail(candidate.email);
+    }
   }
 
   return (
@@ -385,117 +394,158 @@ export function CandidateCard({ candidate, jobId, requirement }: Props) {
               </span>
             </div>
 
-            <button
-              onClick={generateOutreach}
-              disabled={loadingOutreach}
-              style={{
-                padding: "0.25rem 0.625rem",
-                borderRadius: "6px",
-                border: "1px solid var(--color-paper-3)",
-                background: "#fff",
-                fontSize: "0.75rem",
-                color: "var(--color-accent)",
-                cursor: loadingOutreach ? "wait" : "pointer",
-                fontWeight: 600,
-              }}
-            >
-              {loadingOutreach ? "Refining with Gemma 4…" : "⚡ Enhance with AI"}
-            </button>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
+              <button
+                type="button"
+                onClick={handleResetOutreach}
+                title="Reset email to original template"
+                style={{
+                  padding: "0.25rem 0.5rem",
+                  borderRadius: "6px",
+                  border: "1px solid var(--color-paper-3)",
+                  background: "#fff",
+                  fontSize: "0.75rem",
+                  color: "var(--color-ink-3)",
+                  cursor: "pointer",
+                  fontWeight: 500,
+                }}
+              >
+                ↺ Reset Draft
+              </button>
+              <button
+                type="button"
+                onClick={generateOutreach}
+                disabled={loadingOutreach}
+                style={{
+                  padding: "0.25rem 0.625rem",
+                  borderRadius: "6px",
+                  border: "1px solid var(--color-paper-3)",
+                  background: "#fff",
+                  fontSize: "0.75rem",
+                  color: "var(--color-accent)",
+                  cursor: loadingOutreach ? "wait" : "pointer",
+                  fontWeight: 600,
+                }}
+              >
+                {loadingOutreach ? "Refining with Gemma 4…" : "⚡ Enhance with AI"}
+              </button>
+            </div>
           </div>
 
           {/* Recipient */}
           <div style={{ marginBottom: "0.75rem" }}>
-            <div style={{ fontSize: "0.6875rem", fontWeight: 600, color: "var(--color-ink-4)", textTransform: "uppercase", marginBottom: "0.25rem" }}>
-              To (Recipient)
-            </div>
-            <div style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              background: "#fff",
-              border: "1px solid var(--color-paper-3)",
-              borderRadius: "6px",
-              padding: "0.5rem 0.75rem",
-              gap: "0.5rem",
-            }}>
-              {candidate.email ? (
-                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                  <span style={{ fontSize: "0.8125rem", fontWeight: 600, color: "var(--color-ink)" }}>
-                    {candidate.name ? `${candidate.name} <${candidate.email}>` : candidate.email}
-                  </span>
-                  <span style={{ fontSize: "0.6875rem", background: "#f0fdf4", color: "#166534", padding: "1px 6px", borderRadius: "100px", fontWeight: 600 }}>
-                    Verified Git Email
-                  </span>
-                </div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.25rem" }}>
+              <label style={{ fontSize: "0.6875rem", fontWeight: 600, color: "var(--color-ink-4)", textTransform: "uppercase" }}>
+                To (Recipient Email)
+              </label>
+              {candidate.email && recipientEmail === candidate.email ? (
+                <span style={{ fontSize: "0.6875rem", background: "#f0fdf4", color: "#166534", padding: "1px 6px", borderRadius: "100px", fontWeight: 600 }}>
+                  ✓ Discovered from Git Commits
+                </span>
               ) : (
-                <span style={{ fontSize: "0.8125rem", color: "var(--color-ink-4)", fontStyle: "italic" }}>
-                  No public email discovered for @{candidate.username}
+                <span style={{ fontSize: "0.6875rem", color: "var(--color-ink-4)" }}>
+                  Editable
                 </span>
               )}
             </div>
+            <input
+              type="email"
+              value={recipientEmail}
+              onChange={(e) => setRecipientEmail(e.target.value)}
+              placeholder="Enter recipient email (e.g. developer@gmail.com)"
+              style={{
+                width: "100%",
+                boxSizing: "border-box",
+                background: "#fff",
+                border: "1px solid var(--color-paper-3)",
+                borderRadius: "6px",
+                padding: "0.5rem 0.75rem",
+                fontSize: "0.8125rem",
+                color: "var(--color-ink)",
+                fontFamily: "var(--font-mono)",
+                outline: "none",
+              }}
+            />
           </div>
 
           {/* Subject */}
           <div style={{ marginBottom: "0.75rem" }}>
-            <div style={{ fontSize: "0.6875rem", fontWeight: 600, color: "var(--color-ink-4)", textTransform: "uppercase", marginBottom: "0.25rem" }}>
-              Subject
-            </div>
-            <div style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              background: "#fff",
-              border: "1px solid var(--color-paper-3)",
-              borderRadius: "6px",
-              padding: "0.5rem 0.75rem",
-              gap: "0.5rem",
-            }}>
-              <span style={{ fontSize: "0.8125rem", fontWeight: 600, color: "var(--color-ink)" }}>
-                {outreach.subject}
-              </span>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.25rem" }}>
+              <label style={{ fontSize: "0.6875rem", fontWeight: 600, color: "var(--color-ink-4)", textTransform: "uppercase" }}>
+                Subject Line
+              </label>
               <button
+                type="button"
                 onClick={() => {
                   navigator.clipboard.writeText(outreach.subject);
                   setCopiedSubject(true);
                   setTimeout(() => setCopiedSubject(false), 2000);
                 }}
                 style={{
-                  padding: "0.2rem 0.5rem",
+                  padding: "0.15rem 0.5rem",
                   borderRadius: "4px",
                   border: "1px solid var(--color-paper-3)",
                   background: "transparent",
                   fontSize: "0.6875rem",
                   color: copiedSubject ? "var(--color-accent)" : "var(--color-ink-3)",
                   cursor: "pointer",
-                  flexShrink: 0,
                 }}
               >
-                {copiedSubject ? "✓ Copied" : "Copy"}
+                {copiedSubject ? "✓ Copied" : "Copy Subject"}
               </button>
             </div>
+            <input
+              type="text"
+              value={outreach.subject}
+              onChange={(e) => setOutreach((prev) => ({ ...prev, subject: e.target.value }))}
+              placeholder="Email subject..."
+              style={{
+                width: "100%",
+                boxSizing: "border-box",
+                background: "#fff",
+                border: "1px solid var(--color-paper-3)",
+                borderRadius: "6px",
+                padding: "0.5rem 0.75rem",
+                fontSize: "0.8125rem",
+                fontWeight: 600,
+                color: "var(--color-ink)",
+                outline: "none",
+              }}
+            />
           </div>
 
           {/* Body */}
           <div>
-            <div style={{ fontSize: "0.6875rem", fontWeight: 600, color: "var(--color-ink-4)", textTransform: "uppercase", marginBottom: "0.25rem" }}>
-              Message Body
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.25rem" }}>
+              <label style={{ fontSize: "0.6875rem", fontWeight: 600, color: "var(--color-ink-4)", textTransform: "uppercase" }}>
+                Message Body
+              </label>
+              <span style={{ fontSize: "0.6875rem", color: "var(--color-ink-4)", fontFamily: "var(--font-mono)" }}>
+                {outreach.body.split(/\s+/).filter(Boolean).length} words
+              </span>
             </div>
-            <div style={{
-              background: "#fff",
-              border: "1px solid var(--color-paper-3)",
-              borderRadius: "6px",
-              padding: "0.75rem",
-            }}>
-              <pre style={{
+            <textarea
+              rows={8}
+              value={outreach.body}
+              onChange={(e) => setOutreach((prev) => ({ ...prev, body: e.target.value }))}
+              placeholder="Write or edit your pitch message..."
+              style={{
+                width: "100%",
+                boxSizing: "border-box",
+                background: "#fff",
+                border: "1px solid var(--color-paper-3)",
+                borderRadius: "6px",
+                padding: "0.75rem",
                 fontSize: "0.8125rem",
                 color: "var(--color-ink-2)",
-                whiteSpace: "pre-wrap",
-                margin: 0,
                 lineHeight: 1.6,
                 fontFamily: "var(--font-sans)",
-              }}>
-                {outreach.body}
-              </pre>
+                outline: "none",
+                resize: "vertical",
+              }}
+            />
+            <div style={{ fontSize: "0.6875rem", color: "var(--color-ink-4)", marginTop: "0.25rem" }}>
+              💡 All fields are directly editable. Any edits will be automatically passed when opening in Gmail or your Mail app.
             </div>
           </div>
 
@@ -527,7 +577,7 @@ export function CandidateCard({ candidate, jobId, requirement }: Props) {
 
             {/* Direct Web Gmail Composer */}
             <a
-              href={`https://mail.google.com/mail/?view=cm&fs=1${candidate.email ? `&to=${encodeURIComponent(candidate.email)}` : ""}&su=${encodeURIComponent(outreach.subject)}&body=${encodeURIComponent(outreach.body)}`}
+              href={`https://mail.google.com/mail/?view=cm&fs=1${recipientEmail ? `&to=${encodeURIComponent(recipientEmail)}` : ""}&su=${encodeURIComponent(outreach.subject)}&body=${encodeURIComponent(outreach.body)}`}
               target="_blank"
               rel="noopener noreferrer"
               style={{
@@ -551,8 +601,8 @@ export function CandidateCard({ candidate, jobId, requirement }: Props) {
 
             {/* Default Mail Client (mailto) */}
             <a
-              href={candidate.email
-                ? `mailto:${candidate.email}?subject=${encodeURIComponent(outreach.subject)}&body=${encodeURIComponent(outreach.body)}`
+              href={recipientEmail
+                ? `mailto:${recipientEmail}?subject=${encodeURIComponent(outreach.subject)}&body=${encodeURIComponent(outreach.body)}`
                 : `mailto:?subject=${encodeURIComponent(outreach.subject)}&body=${encodeURIComponent(outreach.body)}`}
               style={{
                 padding: "0.375rem 0.75rem",
