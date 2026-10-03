@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { Candidate, SearchJob } from "@gitscout/shared";
+import type { Candidate, SearchJob } from "@gitscout/shared";
 import { getSearchJob } from "../lib/api";
 import { CandidateCard } from "../components/CandidateCard";
 import { ProgressBar } from "../components/ProgressBar";

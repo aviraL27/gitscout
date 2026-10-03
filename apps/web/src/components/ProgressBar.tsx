@@ -1,4 +1,4 @@
-import { SearchStatus } from "@gitscout/shared";
+import type { SearchStatus } from "@gitscout/shared";
 
 interface Progress {
   message: string;

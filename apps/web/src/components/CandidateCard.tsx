@@ -1,4 +1,4 @@
-import { Candidate } from "@gitscout/shared";
+import type { Candidate } from "@gitscout/shared";
 import { useState } from "react";
 
 interface Props {
