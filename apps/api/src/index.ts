@@ -11,7 +11,7 @@ const PORT = Number(process.env.PORT ?? 3001);
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
 
-app.use(cors({ origin: ["http://localhost:5173", "http://localhost:3000"] }));
+app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
@@ -46,9 +46,10 @@ app.get("/api/health", async (_req, res) => {
     status: "ok",
     github: { authenticated: !!process.env.GITHUB_TOKEN, rateLimit },
     ai: {
-      primary: { provider: "ollama", model: ollamaModel, available: ollamaAvailable },
-      fallback: { provider: "gemini-api", available: !!process.env.GEMINI_API_KEY },
+      primary: { provider: "gemma-4-api", model: "gemma-4-31b-it", available: !!process.env.GEMINI_API_KEY },
+      fallback: { provider: "ollama-local", model: ollamaModel, available: ollamaAvailable },
     },
+
   });
 });
 

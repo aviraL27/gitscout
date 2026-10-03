@@ -32,11 +32,16 @@ export class CandidateEvaluator {
   ): Promise<Evaluation> {
     const prompt = this.buildEvaluationPrompt(requirement, candidate);
 
-    const { text, provider } = await aiRouter.chat(prompt, SYSTEM_PROMPT);
-    console.log(`[CandidateEvaluator] Evaluated ${candidate.username} via ${provider}`);
-
-    return this.parseEvaluation(text, candidate, requirement);
+    try {
+      const { text, provider } = await aiRouter.chat(prompt, SYSTEM_PROMPT);
+      console.log(`[CandidateEvaluator] Evaluated ${candidate.username} via ${provider}`);
+      return this.parseEvaluation(text, candidate, requirement);
+    } catch (err) {
+      console.warn(`[CandidateEvaluator] AI call failed for ${candidate.username}, using deterministic fallback:`, err);
+      return this.fallbackEvaluation(candidate, requirement);
+    }
   }
+
 
   async generateOutreach(
     requirement: string,
@@ -153,10 +158,46 @@ Return this exact JSON structure:
   // ─── Parsers ────────────────────────────────────────────────────────────────
 
   private parseEvaluation(rawText: string, candidate: Candidate, requirement: string): Evaluation {
-    const json = this.extractJSON(rawText);
+    const raw = this.extractJSON(rawText) as any;
+    const json = raw?.evaluation ?? raw;
 
     const parsed = EvaluationSchema.safeParse(json);
     if (parsed.success) return parsed.data;
+
+    // Normalize and attempt recovery if partial or slightly variant schema
+    if (json && typeof json === "object") {
+      const score = typeof json.score === "number" ? Math.max(0, Math.min(100, Math.round(json.score))) : 60;
+      const relevant = typeof json.relevant === "boolean" ? json.relevant : score >= 50;
+      const reason = json.reason ?? json.assessment_summary ?? json.summary ?? "Candidate evaluated based on public GitHub repository evidence.";
+      const matchingSkills = Array.isArray(json.matchingSkills ?? json.candidate_skills ?? json.skills) 
+        ? (json.matchingSkills ?? json.candidate_skills ?? json.skills).map(String)
+        : candidate.languages.slice(0, 3);
+      const evidence = Array.isArray(json.evidence)
+        ? json.evidence.map(String)
+        : candidate.repositories.slice(0, 2).map((r) => r.name);
+      const signals = {
+        locationMatch: Boolean(json.signals?.locationMatch ?? true),
+        skillMatch: Boolean(json.signals?.skillMatch ?? true),
+        languageMatch: Boolean(json.signals?.languageMatch ?? true),
+        repositoryEvidence: Boolean(json.signals?.repositoryEvidence ?? (candidate.repositories.length > 0)),
+        recentActivity: Boolean(json.signals?.recentActivity ?? true),
+      };
+
+      const normalized = {
+        relevant,
+        score,
+        reason,
+        matchingSkills,
+        evidence,
+        signals,
+      };
+
+      const normParsed = EvaluationSchema.safeParse(normalized);
+      if (normParsed.success) {
+        console.log(`[CandidateEvaluator] Successfully normalized AI output for ${candidate.username}`);
+        return normParsed.data;
+      }
+    }
 
     // Graceful degradation — compute basic signals deterministically
     console.warn(`[CandidateEvaluator] Schema validation failed for ${candidate.username}, using fallback`);
@@ -203,9 +244,10 @@ Return this exact JSON structure:
     const locationMatch = /india|bengaluru|bangalore|mumbai|delhi|hyderabad|pune|chennai/i.test(
       candidate.location ?? ""
     );
-    const languageMatch = candidate.languages.some((l) =>
-      reqLower.includes(l.toLowerCase())
-    );
+    const knownLangs = ["python", "typescript", "javascript", "rust", "go", "golang", "java", "c++", "cpp"];
+    const requirementMentionsLang = knownLangs.some((lang) => reqLower.includes(lang));
+    const languageMatch = !requirementMentionsLang || candidate.languages.some((l) => reqLower.includes(l.toLowerCase()));
+
     const repositoryEvidence = candidate.repositories.length > 0;
     const sixMonthsAgo = new Date();
     sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);

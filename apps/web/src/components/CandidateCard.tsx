@@ -1,5 +1,6 @@
 import type { Candidate } from "@gitscout/shared";
 import { useState } from "react";
+import { postOutreach } from "../lib/api";
 
 interface Props {
   candidate: Candidate;
@@ -60,12 +61,10 @@ export function CandidateCard({ candidate, jobId, requirement }: Props) {
     if (!jobId) return;
     setLoadingOutreach(true);
     try {
-      const res = await fetch(`/api/search/${jobId}/outreach/${candidate.username}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ senderName: "Aviral", requirement }),
+      const data = await postOutreach(jobId, candidate.username, {
+        senderName: "Aviral",
+        requirement: requirement ?? "Senior developer",
       });
-      const data = await res.json() as { subject: string; body: string };
       setOutreach(data);
     } catch { /* noop */ }
     setLoadingOutreach(false);

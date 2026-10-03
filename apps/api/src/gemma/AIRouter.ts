@@ -35,7 +35,71 @@ export interface AIProvider {
   chat(prompt: string, systemPrompt?: string): Promise<string>;
 }
 
-// ─── Ollama provider (local, primary) ────────────────────────────────────────
+// ─── Gemma 4 API provider (Primary: fast, cloud-hosted Gemma 4) ───────────────
+
+export class GemmaAPIProvider implements AIProvider {
+  name = "gemma-4-api";
+
+  // Official Gemma 4 on Google AI API
+  private readonly model = "gemma-4-31b-it";
+  private readonly fallbackModel = "gemini-2.5-flash";
+
+  private get apiKey(): string {
+    return process.env.GEMINI_API_KEY ?? "";
+  }
+
+  async chat(prompt: string, systemPrompt?: string): Promise<string> {
+    if (!this.apiKey) throw new Error("[GemmaAPIProvider] No GEMINI_API_KEY configured");
+
+    const fullPrompt = systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt;
+
+    // Try official Gemma 4 models first, followed by Gemini 3.8 Flash fallback
+    const modelsToTry = ["gemma-4-26b-a4b-it", "gemma-4-31b-it", "gemini-3.8-flash"];
+
+    for (const targetModel of modelsToTry) {
+      try {
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${this.apiKey}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: fullPrompt }] }],
+            }),
+            signal: AbortSignal.timeout(35_000),
+          }
+        );
+
+        if (!res.ok) {
+          console.warn(`[GemmaAPI] Model ${targetModel} returned HTTP ${res.status}`);
+          continue; // Try next model
+        }
+
+        const data = (await res.json()) as {
+          candidates?: Array<{
+            content?: {
+              parts?: Array<{ text?: string; thought?: boolean }>;
+            };
+          }>;
+        };
+
+        const parts = data.candidates?.[0]?.content?.parts ?? [];
+        // Extract final text (ignoring internal thinking chain if present)
+        const textPart = parts.find((p) => !p.thought && p.text) ?? parts[parts.length - 1];
+        if (textPart?.text) {
+          console.log(`[GemmaAPI] Successfully responded via ${targetModel}`);
+          return textPart.text;
+        }
+      } catch (err: any) {
+        console.warn(`[GemmaAPI] Request to ${targetModel} failed:`, err?.message ?? err);
+      }
+    }
+
+    throw new Error("[GemmaAPIProvider] All cloud API models failed");
+  }
+}
+
+// ─── Ollama provider (Local Gemma 4 fallback) ────────────────────────────────
 
 export class OllamaProvider implements AIProvider {
   name = "ollama-local";
@@ -51,7 +115,7 @@ export class OllamaProvider implements AIProvider {
   async isAvailable(): Promise<boolean> {
     try {
       const res = await fetch(`${this.baseUrl}/api/tags`, {
-        signal: AbortSignal.timeout(3000),
+        signal: AbortSignal.timeout(2000),
       });
       if (!res.ok) return false;
       const data = (await res.json()) as { models?: Array<{ name: string }> };
@@ -77,12 +141,12 @@ export class OllamaProvider implements AIProvider {
         messages,
         stream: false,
         options: {
-          temperature: 0.1,  // Low temperature for structured JSON output
+          temperature: 0.1,
           num_predict: 1024,
         },
         think: false,
       }),
-      signal: AbortSignal.timeout(120_000), // 2 min timeout for local inference
+      signal: AbortSignal.timeout(45_000),
     });
 
     if (!res.ok) {
@@ -95,82 +159,32 @@ export class OllamaProvider implements AIProvider {
   }
 }
 
-// ─── Gemini API provider (fallback) ──────────────────────────────────────────
-
-export class GeminiProvider implements AIProvider {
-  name = "gemini-api";
-
-  private readonly model = "gemma-3-27b-it"; // Gemma model via Gemini API
-
-  private get apiKey(): string {
-    return process.env.GEMINI_API_KEY ?? "";
-  }
-
-
-  async chat(prompt: string, systemPrompt?: string): Promise<string> {
-    if (!this.apiKey) throw new Error("[GeminiProvider] No API key configured");
-
-    const fullPrompt = systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt;
-
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent?key=${this.apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: fullPrompt }] }],
-          generationConfig: {
-            temperature: 0.1,
-            maxOutputTokens: 1024,
-          },
-        }),
-        signal: AbortSignal.timeout(30_000),
-      }
-    );
-
-    if (!res.ok) {
-      throw new Error(`[GeminiAPI] HTTP ${res.status}: ${await res.text()}`);
-    }
-
-    const data = (await res.json()) as {
-      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-    };
-    return data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-  }
-}
-
-// ─── AI Router: Ollama-first, Gemini fallback ─────────────────────────────────
+// ─── AI Router: Gemma 4 API first, local Ollama fallback ─────────────────────
 
 export class AIRouter {
+  private readonly gemmaAPI = new GemmaAPIProvider();
   private readonly ollama = new OllamaProvider();
-  private readonly gemini = new GeminiProvider();
-
-  private ollamaAvailable: boolean | null = null; // cached after first check
 
   async chat(prompt: string, systemPrompt?: string): Promise<{ text: string; provider: string }> {
-    // Check Ollama availability (cache result for 60s — reset on error)
-    if (this.ollamaAvailable === null) {
-      this.ollamaAvailable = await this.ollama.isAvailable();
-      console.log(`[AIRouter] Ollama available: ${this.ollamaAvailable} (model: ${this.ollama.name})`);
+    // 1. Try Gemma 4 API (Fast cloud inference)
+    try {
+      const text = await this.gemmaAPI.chat(prompt, systemPrompt);
+      return { text, provider: this.gemmaAPI.name };
+    } catch (err) {
+      console.warn(`[AIRouter] Gemma 4 API error, checking local Ollama fallback:`, err);
     }
 
-    if (this.ollamaAvailable) {
+    // 2. Fallback to Local Ollama if API is unavailable
+    if (await this.ollama.isAvailable()) {
       try {
         const text = await this.ollama.chat(prompt, systemPrompt);
         return { text, provider: this.ollama.name };
       } catch (err) {
-        console.warn(`[AIRouter] Ollama failed, falling back to Gemini: ${err}`);
-        this.ollamaAvailable = false; // Don't retry Ollama for this session
+        console.warn(`[AIRouter] Local Ollama fallback also failed:`, err);
       }
     }
 
-    // Fallback to Gemini API
-    const text = await this.gemini.chat(prompt, systemPrompt);
-    return { text, provider: this.gemini.name };
-  }
-
-  resetCache(): void {
-    this.ollamaAvailable = null;
+    throw new Error("[AIRouter] No AI evaluation provider available");
   }
 }
 

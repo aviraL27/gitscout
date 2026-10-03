@@ -14,7 +14,7 @@ const github = new GitHubClient();
 const planner = new SearchPlanner();
 const discovery = new CandidateDiscovery(github);
 
-const EVAL_CONCURRENCY = 2; // Limit parallel Gemma calls to avoid OOM on local GPU
+const EVAL_CONCURRENCY = 4; // Fast parallel evaluations via Gemma 4 API
 
 // ─── POST /api/search ─────────────────────────────────────────────────────────
 

@@ -24,8 +24,9 @@ export function SearchPage() {
   const navigate = useNavigate();
   const [requirement, setRequirement] = useState("");
   const [locationScope, setLocationScope] = useState("India");
-  const [languages, setLanguages] = useState<string[]>(["Python"]);
+  const [languages, setLanguages] = useState<string[]>([]); // Default: no language restriction
   const [customLang, setCustomLang] = useState("");
+
   const [minRelevance, setMinRelevance] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -236,9 +237,21 @@ export function SearchPage() {
 
           {/* Languages */}
           <div style={{ marginBottom: "1.75rem" }}>
-            <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, color: "var(--color-ink-2)", marginBottom: "0.5rem" }}>
-              Languages
-            </label>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.5rem" }}>
+              <label style={{ fontSize: "0.8125rem", fontWeight: 600, color: "var(--color-ink-2)" }}>
+                Languages <span style={{ fontWeight: 400, color: "var(--color-ink-4)" }}>{languages.length === 0 ? "(any / unrestricted)" : "(filtered)"}</span>
+              </label>
+              {languages.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setLanguages([])}
+                  style={{ background: "none", border: "none", color: "var(--color-accent)", fontSize: "0.75rem", cursor: "pointer", padding: 0 }}
+                >
+                  Clear filter
+                </button>
+              )}
+            </div>
+
             <div style={{ display: "flex", flexWrap: "wrap", gap: "0.375rem", marginBottom: "0.5rem" }}>
               {LANGUAGE_SUGGESTIONS.map((lang) => (
                 <button
@@ -368,8 +381,9 @@ export function SearchPage() {
             color: "var(--color-ink-3)",
           }}>
             <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#22c55e", display: "inline-block" }} />
-            Gemma 4 · local via Ollama
+            Gemma 4 · Google AI API
           </div>
+
           <div style={{
             display: "flex",
             alignItems: "center",

@@ -123,20 +123,23 @@ export class SearchPlanner {
 
     // ── 3. Build GitHub query strings ─────────────────────────────────────
     const querySet = new Set<string>();
-
     const locationPart = locationFilter ? ` location:${locationFilter}` : "";
 
+    // Always include broad keyword + location queries (unrestricted by language)
     for (const kw of keywords) {
-      // Basic: keyword + location
-      const q = `${kw}${locationPart}`.trim();
-      querySet.add(q);
+      querySet.add(`${kw}${locationPart}`.trim());
+    }
 
-      // With language if single language provided for tighter queries
-      if (languages.length === 1) {
-        const ql = `${kw} language:${languages[0]}${locationPart}`.trim();
-        querySet.add(ql);
+    // Only add language-specific variants if the user explicitly selected languages in criteria
+    const explicitLanguages = criteria.languages ?? [];
+    if (explicitLanguages.length > 0) {
+      for (const kw of keywords.slice(0, 3)) {
+        for (const lang of explicitLanguages) {
+          querySet.add(`${kw} language:${lang}${locationPart}`.trim());
+        }
       }
     }
+
 
     // Also run a repository-search style query: users who have repos in topic
     // This surfaces people who tag their repos with the right topics.
