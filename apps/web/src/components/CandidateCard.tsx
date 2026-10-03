@@ -1,6 +1,6 @@
 import type { Candidate } from "@gitscout/shared";
 import { useState } from "react";
-import { postOutreach, sendEmail } from "../lib/api";
+import { postOutreach } from "../lib/api";
 
 interface Props {
   candidate: Candidate;
@@ -90,9 +90,6 @@ export function CandidateCard({ candidate, jobId, requirement }: Props) {
   const [copiedBody, setCopiedBody] = useState(false);
   const [copiedEmail, setCopiedEmail] = useState(false);
   const [loadingOutreach, setLoadingOutreach] = useState(false);
-  const [sendingEmail, setSendingEmail] = useState(false);
-  const [sentEmailSuccess, setSentEmailSuccess] = useState<string | null>(null);
-  const [sendEmailError, setSendEmailError] = useState<string | null>(null);
 
   const topRepos = [...candidate.repositories]
     .sort((a, b) => b.stars - a.stars)
@@ -121,30 +118,6 @@ export function CandidateCard({ candidate, jobId, requirement }: Props) {
     setOutreach(fresh);
     if (candidate.email) {
       setRecipientEmail(candidate.email);
-    }
-  }
-
-  async function handleSendEmailDirectly() {
-    if (!recipientEmail || !recipientEmail.includes("@")) {
-      setSendEmailError("Please specify a valid recipient email address first.");
-      return;
-    }
-    setSendingEmail(true);
-    setSendEmailError(null);
-    setSentEmailSuccess(null);
-    try {
-      const res = await sendEmail({
-        to: recipientEmail,
-        subject: outreach.subject,
-        body: outreach.body,
-        senderName: "Aviral",
-      });
-      setSentEmailSuccess(`✓ Email sent to ${res.recipient} via aviral270406@gmail.com!`);
-      setTimeout(() => setSentEmailSuccess(null), 8000);
-    } catch (err) {
-      setSendEmailError(err instanceof Error ? err.message : "Failed to deliver email");
-    } finally {
-      setSendingEmail(false);
     }
   }
 
@@ -648,72 +621,7 @@ export function CandidateCard({ candidate, jobId, requirement }: Props) {
               <span>🚀</span>
               <span>Open in Mail App</span>
             </a>
-
-            {/* Direct Send via Gmail SMTP (Nodemailer) */}
-            <button
-              type="button"
-              onClick={handleSendEmailDirectly}
-              disabled={sendingEmail}
-              style={{
-                padding: "0.375rem 0.875rem",
-                borderRadius: "6px",
-                border: "1px solid #16a34a",
-                background: sendingEmail ? "#f0fdf4" : "#16a34a",
-                fontSize: "0.75rem",
-                fontWeight: 600,
-                color: sendingEmail ? "#16a34a" : "#fff",
-                cursor: sendingEmail ? "wait" : "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: "0.35rem",
-                marginLeft: "auto",
-                transition: "all 0.15s",
-              }}
-              title="Send personalized email directly from aviral270406@gmail.com via Nodemailer"
-            >
-              <span>{sendingEmail ? "⏳" : "⚡"}</span>
-              <span>{sendingEmail ? "Sending via Nodemailer…" : "Send Email via GitScout"}</span>
-            </button>
           </div>
-
-          {/* Feedback messages */}
-          {sentEmailSuccess && (
-            <div style={{
-              marginTop: "0.75rem",
-              padding: "0.5rem 0.75rem",
-              background: "#f0fdf4",
-              border: "1px solid #bbf7d0",
-              borderRadius: "6px",
-              fontSize: "0.75rem",
-              color: "#15803d",
-              fontWeight: 600,
-              display: "flex",
-              alignItems: "center",
-              gap: "0.5rem",
-            }}>
-              <span>✓</span>
-              <span>{sentEmailSuccess}</span>
-            </div>
-          )}
-
-          {sendEmailError && (
-            <div style={{
-              marginTop: "0.75rem",
-              padding: "0.5rem 0.75rem",
-              background: "#fef2f2",
-              border: "1px solid #fecaca",
-              borderRadius: "6px",
-              fontSize: "0.75rem",
-              color: "#b91c1c",
-              fontWeight: 600,
-              display: "flex",
-              alignItems: "center",
-              gap: "0.5rem",
-            }}>
-              <span>⚠️</span>
-              <span>{sendEmailError}</span>
-            </div>
-          )}
         </div>
       )}
 
