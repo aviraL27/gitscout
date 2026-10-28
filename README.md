@@ -199,24 +199,6 @@ GitScout is pre-configured for deployment on [Render](https://render.com):
 
 ---
 
-## 🤝 Contributing for Hacktoberfest 2026
-
-We welcome open-source contributions from participants of **Hacktoberfest 2026**, **GDG Cloud Nagpur**, and the **MLH community**!
-
-1. **Fork** the repository.
-2. Create a feature branch: `git checkout -b feature/awesome-addition`
-3. Commit your changes: `git commit -m "Add awesome feature"`
-4. Push to branch: `git push origin feature/awesome-addition`
-5. Open a **Pull Request** referencing the issue you solved.
-
-### Contribution Ideas:
-- [ ] Add PostgreSQL adapter for `SearchJobStore`
-- [ ] Add export to CSV / JSON for qualified candidate lists
-- [ ] Add LinkedIn / Twitter enrichment connectors
-- [ ] Add support for additional local LLM backends (vLLM, LMStudio)
-
----
-
 ## 📄 License
 
 Distributed under the MIT License. See [LICENSE](LICENSE) for more information.
